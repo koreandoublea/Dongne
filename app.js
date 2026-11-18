@@ -12,20 +12,35 @@ const SCENE = Object.fromEntries(SCENES.map((s) => [s.id, s]));
 const PAT = Object.fromEntries(PATTERNS.map((p) => [p.id, p]));
 const BY_PAT = {};
 for (const s of SENTENCES) for (const p of s.pats) (BY_PAT[p] = BY_PAT[p] || []).push(s.id);
+for (const w of WORDS) ITEMS[w.id] = w;
+const TOPIC = Object.fromEntries(TOPICS.map((t) => [t.id, t]));
+const BY_TOPIC = {};
+for (const w of WORDS) (BY_TOPIC[w.topic] = BY_TOPIC[w.topic] || []).push(w.id);
+// a word's example with the [bracketed] form pulled out: { before, form, after }
+function exParts(w) { const m = w.ex.match(/^(.*?)\[(.+?)\](.*)$/); return m ? { before: m[1], form: m[2], after: m[3] } : { before: w.ex, form: "", after: "" }; }
+const exPlain = (w) => w.ex.replace(/[[\]]/g, "");
+const isVerb = (w) => /다$/.test(w.ko);
 
 // ───────────────────────── saved state ─────────────────────────
 function blank() {
   return {
-    v: 1, items: {}, days: {}, missions: {}, culture: {}, friends: {}, handled: {},
+    v: 1, items: {}, days: {}, culture: {}, friends: {}, handled: {}, custom: [],
     focus: null, onboarded: false, total: 0,
-    settings: { name: "", goal: 20, newPerDay: 20, rate: 0.9, voice: "", autoplay: true, autoAdvance: true, quiet: false, showEn: false },
+    settings: { name: "", goal: 20, newPerDay: 20, rate: 0.9, voice: "", autoplay: true, autoAdvance: true, quiet: false, showEn: false, level: 2 },
   };
 }
+// level: 1 beginner (everything in order) · 2 elementary (skim the survival basics) ·
+// 3 intermediate (skim all earlier scenes; new material is mostly vocabulary + level-4 grammar)
+const LEVELS = { 1: "Beginner", 2: "Elementary", 3: "Intermediate" };
 let state = load();
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY));
-    if (raw && raw.v === 1) { const b = blank(); return { ...b, ...raw, settings: { ...b.settings, ...raw.settings } }; }
+    if (raw && raw.v === 1) {
+      const b = blank(), st = { ...b, ...raw, settings: { ...b.settings, ...raw.settings } };
+      if (!raw.settings?.level && raw.onboarded) st.settings.level = 3;   // progress from before levels existed
+      return st;
+    }
   } catch (e) {}
   return blank();
 }
@@ -65,20 +80,26 @@ function h(tag, props, ...kids) {
   return el;
 }
 const $ = (s, el = document) => el.querySelector(s);
+// card parts are often optional (null); the DOM would print those as the text "null"
+const _replace = Element.prototype.replaceChildren;
+Element.prototype.replaceChildren = function (...kids) { return _replace.apply(this, kids.flat().filter((k) => k != null && k !== false)); };
 
 // ───────────────────────── scheduler ─────────────────────────
 // step 0/1 = learning (minutes apart), step 2 = review (days). s = stability in days.
-function introduce(id, known) {
+// known = already knew it (skips learning). days = how long until it's checked again.
+// Skimmed easy phrases you already knew don't count against today's new-item cap.
+function introduce(id, known, days = 4, countNew = true) {
   const now = Date.now();
   state.items[id] = known
-    ? { s: 4, step: 2, due: now + 4 * DAY, reps: 1, lapses: 0, last: now }
+    ? { s: days, step: 2, due: now + days * DAY, reps: 1, lapses: 0, last: now }
     : { s: 0, step: 0, due: now + MIN, reps: 1, lapses: 0, last: now };
-  today().new++;
+  if (countNew) today().new++;
 }
 function grade(id, g) {   // 1 again · 2 hard · 3 good · 4 easy
   const r = state.items[id], now = Date.now();
   if (!r) return;
   r.reps++;
+  if (g === 1) { r.wrong = (r.wrong || 0) + 1; r.lastWrong = now; }   // for Review: mistakes & weakest
   if (r.step < 2) {
     if (g === 1) { r.step = 0; r.due = now + MIN; }
     else if (g === 4 || r.step === 1) { r.step = 2; r.s = g === 4 ? 3 : 1; r.due = now + r.s * DAY; }
@@ -105,15 +126,65 @@ function sceneStats(sc) {
 const friendLevel = (sc) => Math.min(5, Math.floor(sceneStats(sc).mastery * 5 + 1e-9));
 const useCasual = (sc) => SCENE[sc].char.elder && friendLevel(sc) >= 3;
 
-function nextNew(ex) {
-  const f = state.focus;
-  if (f?.type === "pattern") {
-    const id = (BY_PAT[f.id] || []).find((id) => !state.items[id] && !ex.has(id));
-    if (id) return id;
+// New material comes from three streams, mixed by level:
+//   w = vocabulary (one topic after another in rotation, so similar words don't pile up)
+//   g = the intermediate scenes (level-4 grammar), rotating between them
+//   s = the earlier scenes in order (below your level they arrive as quick "skim" checks)
+const PLANS = { 1: ["s", "s", "s", "w", "s", "s"], 2: ["s", "w", "s", "g", "w", "s"], 3: ["w", "w", "g", "w", "s", "w", "w", "g"] };
+let newTurn = 0;
+const unseen = (ex) => (id) => !state.items[id] && !ex.has(id);
+function nextWord(ex, topic) {
+  if (topic) return (BY_TOPIC[topic] || []).find(unseen(ex)) || null;
+  // the topic you've started least, so topics advance side by side
+  let best = null, bestN = Infinity;
+  for (const t of TOPICS) {
+    const ids = BY_TOPIC[t.id], id = ids.find(unseen(ex));
+    if (!id) continue;
+    const n = ids.filter((i) => state.items[i]).length;
+    if (n < bestN) { best = id; bestN = n; }
   }
-  const scenes = f?.type === "scene" ? [f.id, ...SCENES.map((s) => s.id)] : SCENES.map((s) => s.id);
-  for (const sc of scenes) { const id = ORDER[sc].find((id) => !state.items[id] && !ex.has(id)); if (id) return id; }
-  return null;
+  return best;
+}
+function nextScene(ex, scenes, rotate) {
+  if (!rotate) { for (const sc of scenes) { const id = ORDER[sc].find(unseen(ex)); if (id) return id; } return null; }
+  let best = null, bestP = Infinity;
+  for (const sc of scenes) {
+    const id = ORDER[sc].find(unseen(ex));
+    if (!id) continue;
+    const p = sceneStats(sc).seen / ORDER[sc].length;
+    if (p < bestP) { best = id; bestP = p; }
+  }
+  return best;
+}
+const EARLY = SCENES.filter((s) => s.lvl < 3).map((s) => s.id), INTER = SCENES.filter((s) => s.lvl >= 3).map((s) => s.id);
+function nextNew(ex) {
+  const f = state.focus, L = state.settings.level || 2;
+  if (f?.type === "pattern") { const id = (BY_PAT[f.id] || []).find(unseen(ex)); if (id) return id; }
+  if (f?.type === "scene") { const id = ORDER[f.id].find(unseen(ex)); if (id) return id; }
+  if (f?.type === "topic") { const id = nextWord(ex, f.id); if (id) return id; }
+  const mine = BY_TOPIC.mine.find(unseen(ex));     // words you added yourself come first
+  if (mine) return mine;
+  const seen = Object.keys(state.items).length;
+  const from = (src) => src === "w" ? (L > 1 || seen >= 60 ? nextWord(ex) : null)
+    : src === "g" ? nextScene(ex, INTER, true) : nextScene(ex, EARLY, false);
+  const plan = PLANS[L] || PLANS[2];
+  for (let k = 0; k < plan.length; k++) {
+    const id = from(plan[(newTurn + k) % plan.length]);
+    if (id) { newTurn = (newTurn + k + 1) % plan.length; return id; }
+  }
+  return from("w") || from("g") || from("s");
+}
+// below your level, an earlier-scene phrase is "easy": it comes in a batch to skim
+const isEasy = (it) => it.kind === "s" && SCENE[it.scene].lvl < (state.settings.level || 2);
+function skimBatch(firstId, ex) {
+  const it = ITEMS[firstId], ids = [];
+  for (const id of ORDER[it.scene].slice(ORDER[it.scene].indexOf(firstId))) {
+    if (ids.length >= 6) break;
+    if (state.items[id] || ex.has(id)) continue;
+    if (ITEMS[id].kind !== "s") break;    // stop at a dialogue: it gets played properly
+    ids.push(id);
+  }
+  return ids;
 }
 function pickItem(ex) {
   const now = Date.now();
@@ -151,8 +222,18 @@ let lastType = "";
 function chooseType(it) {
   const r = state.items[it.id];
   if (it.kind === "d") return r && Math.random() < (r.step >= 2 ? 0.6 : 0.3) ? "reply" : "dialog";
-  if (!r) return "intro";
   const q = state.settings.quiet, voice = Speech.hasVoice();
+  if (it.kind === "w") {
+    if (!r) return "wintro";
+    // recognize it → recall it → produce it, as the word settles in
+    let wp = r.step < 2 ? ["wmean", "wrecall", "wcloze", "wlisten"]
+      : r.s < 7 ? ["wrecall", "wcloze", "wspell", "wsay", "wlisten", "wmean"]
+      : ["wsay", "wspell", "wcloze", "wrecall"];
+    wp = wp.filter((t) => !(t === "wlisten" && !voice) && !(t === "wspell" && !spellable(it)) && !(t === "wcloze" && !exParts(it).form));
+    const v = wp.filter((t) => t !== lastType);
+    return (lastType = pick(v.length ? v : wp));
+  }
+  if (!r) return "intro";
   let pool;
   if (r.step < 2) pool = it.hear ? ["listen", "read", "hearko"] : ["listen", "read", "build", "cloze", "hearko"];
   else if (r.s < 7) pool = it.hear ? ["listen", "speed", "read", "shadow", "hearko"] : ["build", "say", "shadow", "swap", "listen", "speed", "cloze", "hearko"];
@@ -175,9 +256,44 @@ const cards = [];          // { el, spec, answered, onShow, onLeave }
 const events = [];
 let active = null, sinceCulture = 0, sinceMatch = 0;
 
+// Review sessions, started from the Review tab: only due items, or a fixed list (recent
+// mistakes, weakest items), with no new material. A miss in a list session comes back
+// at the end of the queue, up to twice, so it's drilled until it sticks.
+let session = null;    // { kind, title, queue, total, served, right, retries }
+function startSession(kind, title, ids) {
+  session = { kind, title, queue: ids ? ids.slice() : null, total: ids ? ids.length : dueNow().length, served: 0, right: 0, retries: {} };
+  hud(); showView("feed");
+  if (started) refreshAhead();
+}
+function endSession(msg) { session = null; hud(); if (msg) toast(msg); }
+function dueNow(ex = new Set()) {
+  const now = Date.now();
+  return Object.entries(state.items).filter(([id, r]) => r.due <= now && ITEMS[id] && !ex.has(id))
+    .sort((a, b) => (a[1].step < 2 ? 0 : 1) - (b[1].step < 2 ? 0 : 1) || a[1].due - b[1].due).map(([id]) => id);
+}
+function sessionNext(ex) {
+  if (session.kind === "due") return dueNow(ex)[0] || null;
+  const q = session.queue;
+  for (let i = 0; i < q.length; i++) if (!ex.has(q[i]) || q.length - i <= 1) { const id = q.splice(i, 1)[0]; if (ITEMS[id] && state.items[id]) return id; i--; }
+  return null;
+}
+const sessionLeft = () => !session ? 0 : session.kind === "due" ? dueNow().length : session.queue.length;
+
 function nextSpec() {
   if (events.length) return events.shift();
   const t = today();
+  if (session) {
+    const ex = new Set(cards.slice(-3).flatMap((c) => (c.spec.item ? [c.spec.item.id] : [])));
+    const id = sessionNext(ex);
+    if (!id) {
+      const s = session; endSession();
+      return { kind: "event", icon: "✅", title: s.kind === "due" ? "All caught up!" : `${s.title}: done`,
+        text: s.done ? `${s.done} cards, ${s.right} right the first time through. Back to your normal mix now.` : "Nothing left to review right now. Back to your normal mix." };
+    }
+    session.served++;
+    const item = ITEMS[id], type = chooseType(item);
+    return { kind: "item", item, type, cloze: type === "cloze" ? clozeTarget(item) : null, session: true };
+  }
   if (sinceCulture >= 11) {
     const unlocked = new Set(SCENES.filter((s) => sceneStats(s.id).seen).map((s) => s.id));
     const pool = CULTURE.filter((c) => unlocked.has(c.scene));
@@ -185,19 +301,15 @@ function nextSpec() {
     const c = fresh[0] || (pool.length && Math.random() < 0.3 ? pool.sort((a, b) => state.culture[a.id] - state.culture[b.id])[0] : null);
     if (c) { sinceCulture = 0; return { kind: "culture", c }; }
   }
-  if (t.cards >= 25 && !t.missionShown && !Object.values(state.missions).some((ts) => ts.some((x) => ymd(x) === ymd()))) {
-    t.missionShown = true;
-    const m = pick(MISSIONS.filter((m) => m.lvl <= 1 + Math.floor(Object.keys(state.items).length / 80)));
-    return { kind: "mission", m };
-  }
   if (sinceMatch >= 12) {
     const pairs = glossPairs();
     if (pairs.length >= 10) { sinceMatch = 0; return { kind: "match", pairs: pairs.slice(0, 5) }; }
   }
-  const ex = new Set(cards.slice(-4).filter((c) => c.spec.item).map((c) => c.spec.item.id));
+  const ex = new Set(cards.slice(-6).flatMap((c) => (c.spec.item ? [c.spec.item.id] : c.spec.ids || [])));
   const id = pickItem(ex);
   if (!id) return { kind: "event", icon: "🏆", title: "You've met every phrase in Dongne", text: "Incredible. Keep swiping to review, and go use it with real people!" };
   sinceCulture++; sinceMatch++;
+  if (!state.items[id] && isEasy(ITEMS[id])) return { kind: "skim", ids: skimBatch(id, ex) };
   const item = ITEMS[id], type = chooseType(item);
   return { kind: "item", item, type, cloze: type === "cloze" ? clozeTarget(item) : null };
 }
@@ -205,6 +317,12 @@ function nextSpec() {
 // Word pairs for the matching game, from the glosses of phrases you've already met.
 function glossPairs() {
   const seenW = new Set(), seenM = new Set(), out = [];
+  for (const w of shuffle(WORDS.filter((w) => state.items[w.id]))) {
+    const m = w.en.replace(/\s*\(.*?\)/g, "").split(/[,;]/)[0].trim();
+    if (w.ko.length > 8 || m.length > 24 || seenM.has(m)) continue;
+    seenW.add(w.ko); seenM.add(m); out.push([w.ko, m]);
+    if (out.length >= 3) break;      // leave room for words from phrases too
+  }
   for (const s of shuffle(SENTENCES.filter((s) => state.items[s.id] && s.gl))) {
     for (const g of s.gl.split("|")) {
       let [w, m] = g.split("=");
@@ -225,6 +343,7 @@ const CLOZE_PARTICLES = { topic: ["은", "는"], subj: ["이", "가"], obj: ["�
 const CLOZE_SWAP = { topic: ["e", "eseo", "hago", "do"], subj: ["obj", "e", "eseo", "hago"], obj: ["subj", "e", "eseo"], e: ["subj", "eseo", "hago"], eseo: ["e", "obj", "subj"], do: ["topic", "obj", "e"], hago: ["eseo", "obj", "subj"] };
 const CLOZE_ENDINGS = [
   { pats: ["myeon", "nikka", "ryeogo"], ends: ["면", "니까", "려고"] },     // all attach to the (으) form
+  { pats: ["geodeun", "janha", "deora"], ends: ["거든요", "잖아요", "더라고요"] },   // the English cues which: "you see" / "you know" / "turned out"
 ];
 function withParticle(stem, k, b) {
   if (k === "subj" && { 저: 1, 나: 1, 너: 1 }[stem]) return { 저: "제", 나: "내", 너: "네" }[stem] + "가";
@@ -302,8 +421,9 @@ function activate(card) {
 function leave(card) {
   Speech.stop(); Speech.stopListening(); Speech.stopRecording();
   card.onLeave?.();
+  if (card.spec.kind === "skim") return card.finishSkim?.();     // swiped on: untapped ones count as known
   if (card.spec.kind !== "item" || card.answered) return;
-  if (card.spec.type === "intro") return introduceCard(card, false);
+  if (card.spec.type === "intro" || card.spec.type === "wintro") return introduceCard(card, false);
   // swiped past without answering: no grade, just let other cards through for a few minutes
   const id = card.spec.item.id;
   if (!state.items[id]) introduce(id, false);   // a brand-new dialogue skipped unplayed
@@ -331,6 +451,13 @@ function finish(card, g, { silent } = {}) {
   grade(it.id, g);
   t.cards++; state.total++;
   if (g >= 3) t.right++;
+  if (session && card.spec.session) {
+    const rt = session.retries;
+    session.done = (session.done || 0) + 1;
+    if (g >= 3 && !rt[it.id]) session.right++;
+    if (g === 1 && session.queue && (rt[it.id] || 0) < 2) { rt[it.id] = (rt[it.id] || 0) + 1; session.queue.push(it.id); }
+    hud();
+  }
   afterAnswer(it.scene);
   card.el.classList.add("done", g >= 3 ? "good" : "bad");
   save(); hud();
@@ -347,15 +474,28 @@ function introduceCard(card, knew) {
 }
 function afterAnswer(sc) {
   const t = today();
+  // daily snapshot of what you know, for the Progress chart
+  let kw = 0, kp = 0;
+  for (const id in state.items) if (state.items[id].step >= 2 && ITEMS[id]) ITEMS[id].kind === "w" ? kw++ : kp++;
+  t.knownW = kw; t.knownP = kp;
   if (t.cards >= state.settings.goal && !t.goalShown) {
     t.goalShown = true;
     events.push({ kind: "event", icon: "🔥", title: `Daily goal done! ${streak()}-day streak`, text: "That's real practice instead of scrolling. Keep going; every swipe still counts." });
   }
+  if (!SCENE[sc]) return wordMilestone();     // a vocabulary word, not a scene
   const lvl = friendLevel(sc), prev = state.friends[sc] || 0;
   if (lvl > prev) { state.friends[sc] = lvl; events.push(friendEvent(sc, lvl)); }
   if (!state.handled[sc] && sceneStats(sc).canHandle) {
     state.handled[sc] = true;
     events.push({ kind: "event", icon: SCENE[sc].icon, title: "New real-world skill unlocked", text: `You can now: ${SCENE[sc].can}. Go try it for real!` });
+  }
+}
+const wordsKnown = () => WORDS.filter((w) => known(w.id)).length;
+function wordMilestone() {
+  const n = wordsKnown(), step = Math.floor(n / 25) * 25;
+  if (step > 0 && step > (state.wordMile || 0)) {
+    state.wordMile = step;
+    events.push({ kind: "event", icon: "📚", title: `${step} new words in the bank`, text: "Each one comes back right before you'd forget it. Try slipping one into a real conversation today." });
   }
 }
 function friendEvent(sc, lvl) {
@@ -374,10 +514,10 @@ function friendEvent(sc, lvl) {
 const LABEL = { intro: "New phrase", listen: "Listen", read: "Read", build: "Build it", swap: "Same pattern", say: "Say it", shadow: "Shadow", speed: "Real speed", dialog: "Your turn", cloze: "Fill the blank", hearko: "Which did you hear?", reply: "Quick reply" };
 
 function shell(card, label, ...body) {
-  const it = card.spec.item, sc = it && SCENE[it.scene];
+  const it = card.spec.item, sc = it && SCENE[it.scene], tp = it && TOPIC[it.topic];
   return h("section.card", null, h("div.card-in", null,
     h("div.card-top", null,
-      sc ? h("span.chip", null, sc.icon + " " + sc.ko) : null,
+      sc ? h("span.chip", null, sc.icon + " " + sc.ko) : tp ? h("span.chip.word-chip", null, tp.icon + " 단어 · " + tp.ko) : null,
       h("span.label", null, label)),
     h("div.card-body", null, ...body),
     h("div.swipe-hint", null, "swipe up ↑")));
@@ -440,15 +580,18 @@ function micErrorText(err) {
     "not-allowed": "Microphone blocked. Allow it in the browser's site settings.",
     "service-not-allowed": "Speech check isn't allowed here. Use the reveal button instead.",
     network: "Speech check needs a connection, or Korean offline speech installed on your phone (see Settings).",
-    "no-speech": "Didn't hear anything. Try again a little louder.",
+    "no-speech": "Didn't catch anything. Tap the mic, wait for “Listening…”, then speak.",
+    busy: "The mic was busy. Tap again.",
+    aborted: "Stopped. Tap the mic to try again.",
     "audio-capture": "No microphone found.",
     unsupported: "This browser has no speech check. Use reveal instead.",
     "language-not-supported": "Korean speech isn't installed on this phone (see Settings).",
   }[err] || "Couldn't hear that. Try again.";
 }
-// Mark target syllables the recognizer didn't hear (syllable-level LCS).
-function diffView(said, target) {
-  const a = [...said.replace(/\s/g, "")], b = [...fill(target)];
+// Mark target syllables the recognizer didn't hear (syllable-level LCS). live = still
+// speaking, so unheard syllables are "not yet" (grey) instead of "missed" (red).
+function syllableHits(said, target) {
+  const a = [...said.replace(/[\s.,!?~…]/g, "")], b = [...fill(target)];
   const bc = b.map((c) => (/[\s.,!?~…]/.test(c) ? null : c));
   const t = bc.filter(Boolean);
   const dp = Array.from({ length: a.length + 1 }, () => new Array(t.length + 1).fill(0));
@@ -458,28 +601,70 @@ function diffView(said, target) {
   for (let i = 0, j = 0; i < a.length && j < t.length;) {
     if (a[i] === t[j]) { hit.add(j); i++; j++; } else if (dp[i + 1][j] >= dp[i][j + 1]) i++; else j++;
   }
-  let k = 0;
-  return h("div.ko.diff", { lang: "ko" }, b.map((c, idx) => (bc[idx] === null ? c : h("span", { class: hit.has(k++) ? "hit" : "miss" }, c))));
+  return { b, bc, hit, missed: t.length - hit.size };
 }
-// The mic button shared by say / intro / dialog. onResult gets {text, score, alts} or {error}.
+function diffView(said, target, live = false) {
+  const { b, bc, hit } = syllableHits(said, target);
+  let k = 0;
+  return h("div.ko.diff" + (live ? ".live-diff" : ""), { lang: "ko" }, b.map((c, idx) => (bc[idx] === null ? c : h("span", { class: hit.has(k++) ? "hit" : live ? "pend" : "miss" }, c))));
+}
+const PERFECT = 0.92, CLOSE = 0.65;
+// The verdict box after speaking: a clear right / close / wrong, the match %, what was
+// heard, and which syllables were missed.
+// "Perfect" needs every syllable: on a long sentence one wrong verb barely dents the score.
+const speechLevel = (r, target) => r.score >= PERFECT && syllableHits(r.text, target).missed === 0 ? "ok" : r.score >= CLOSE ? "meh" : "bad";
+function verdict(r, target, msgs = {}) {
+  const lvl = speechLevel(r, target);
+  const head = { ok: msgs.ok || "✓ 완벽해요! Sounds right.", meh: msgs.meh || "Almost! Red parts were missed.", bad: msgs.bad || "✗ Not quite. Listen and try again." }[lvl];
+  navigator.vibrate?.(lvl === "ok" ? 35 : lvl === "meh" ? [25, 60, 25] : [60, 50, 60]);
+  return { lvl, el: [
+    h("div.verdict-head", null, h("span", null, head), h("span.pct." + lvl, null, Math.round(r.score * 100) + "%")),
+    diffView(r.text, target),
+    h("div.heard", null, "Heard: “", r.text || "…", "”")] };
+}
+// The mic button shared by say / intro / dialog / words. onResult gets {text, score, index, alts} or {error}.
+// While you talk it shows the target lighting up syllable by syllable and a live match bar,
+// and it stops by itself as soon as you've said it right.
 function micButton(target, onResult, label = "🎤 Say it") {
-  const live = h("div.live");
+  const targets = (Array.isArray(target) ? target : [target]).map((t) => fill(t));
+  const bestOf = (alts) => {
+    let b = { text: alts[0] || "", score: 0, index: 0 };
+    targets.forEach((tg, i) => { const x = Speech.best(alts, tg); if (x.score > b.score) b = { ...x, index: i }; });
+    return b;
+  };
+  const status = h("div.mic-status"), live = h("div.mic-target"), heard = h("div.heard-live");
+  const fillBar = h("div.meter-fill"), meter = h("div.meter", null, fillBar);
+  const panel = h("div.mic-live", { hidden: true }, status, live, meter, heard);
+  const setLive = (text) => {
+    const b = bestOf(text ? [text] : []);
+    live.replaceChildren(diffView(text, targets[b.index], true));
+    heard.textContent = text ? "“" + text + "”" : "";
+    fillBar.style.width = Math.round(b.score * 100) + "%";
+    fillBar.className = "meter-fill " + ({ ok: "ok", meh: "meh" }[speechLevel(b, targets[b.index])] || "");
+  };
   const btn = h("button.btn.mic", {
     onclick: async () => {
       if (btn.classList.contains("on")) return Speech.stopListening();
       Speech.stop();
-      btn.classList.add("on"); btn.textContent = "● Listening… (tap to stop)"; live.textContent = "";
-      const r = await Speech.listen({ onInterim: (t) => (live.textContent = t) });
-      btn.classList.remove("on"); btn.textContent = label; live.textContent = "";
+      btn.classList.add("on"); btn.textContent = "■ Done talking";
+      panel.hidden = false; status.textContent = "Starting the mic…";
+      if (targets.length === 1) setLive(""); else { live.replaceChildren(); heard.textContent = ""; fillBar.style.width = "0"; }
+      const quiet = setTimeout(() => (status.textContent = "Still listening… speak up, or check the mic is allowed"), 5000);
+      const longest = Math.max(...targets.map((t) => t.length));
+      const r = await Speech.listen({
+        onState: (s) => (status.textContent = s === "listening" ? "🎤 Listening… speak now" : "👂 Hearing you…"),
+        onInterim: (text) => { clearTimeout(quiet); setLive(text); },
+        stopWhen: (alts) => { const b = bestOf(alts); return b.score >= 0.97 && speechLevel(b, targets[b.index]) === "ok"; },
+        maxMs: 5000 + longest * 300,
+      });
+      clearTimeout(quiet);
+      btn.classList.remove("on"); btn.textContent = "🎤 Try again";
+      panel.hidden = true;
       if (r.error) return onResult({ error: r.error });
-      const targets = Array.isArray(target) ? target : [target];
-      let best = { text: "", score: 0, index: 0 };
-      targets.forEach((tg, i) => { const b = Speech.best(r.alts, fill(tg)); if (b.score > best.score) best = { ...b, index: i }; });
-      if (!best.text) best.text = r.alts[0] || "";
-      onResult(best);
+      onResult({ ...bestOf(r.alts), alts: r.alts });
     },
   }, label);
-  return h("div.mic-wrap", null, btn, live);
+  return h("div.mic-wrap", null, btn, panel);
 }
 
 // ───────────────────────── card types ─────────────────────────
@@ -489,8 +674,172 @@ function render(card) {
   if (s.kind === "event") return eventCard(card);
   if (s.kind === "mission") return missionCard(card);
   if (s.kind === "match") return matchCard(card);
+  if (s.kind === "skim") return skimCard(card);
   return ({ intro: introCard, listen: listenCard, read: readCard, build: buildCard, swap: buildCard, say: sayCard, shadow: shadowCard, speed: listenCard,
-    dialog: dialogCard, cloze: clozeCard, hearko: hearKoCard, reply: replyCard })[s.type](card);
+    dialog: dialogCard, cloze: clozeCard, hearko: hearKoCard, reply: replyCard,
+    wintro: wordIntroCard, wmean: wordChoiceCard, wrecall: wordChoiceCard, wlisten: wordChoiceCard, wcloze: wordClozeCard, wspell: wordSpellCard, wsay: wordSayCard })[s.type](card);
+}
+
+// ───────────────────────── vocabulary cards ─────────────────────────
+const spellable = (w) => /^[가-힣]{2,5}$/.test(w.ko);
+const rate = () => state.settings.rate;
+// wrong options: same topic first (fine distinctions), or other topics with the same word
+// class when a sentence slot must stay unambiguous; words you've met come first
+function wordDistractors(w, n = 3, { sameClass = false, crossTopic = false } = {}) {
+  const ok = WORDS.filter((x) => x.id !== w.id && x.en !== w.en && x.ko !== w.ko && (!sameClass || isVerb(x) === isVerb(w)));
+  const seenFirst = (a) => [...shuffle(a.filter((x) => state.items[x.id])), ...shuffle(a.filter((x) => !state.items[x.id]))];
+  const other = seenFirst(ok.filter((x) => x.topic !== w.topic));
+  return (crossTopic ? other : [...shuffle(ok.filter((x) => x.topic === w.topic)), ...other]).slice(0, n);
+}
+function exLine(w, mode) {
+  const p = exParts(w);
+  const mid = mode === "blank" ? h("span.blank", null, "＿＿＿") : h("mark", null, p.form);
+  return h("div.ko.ex", { lang: "ko" }, p.before, mid, p.after);
+}
+function exBox(w, blurEn = false) {
+  if (!w.ex) return null;     // your own words may have no example
+  return h("div.ex-box", null,
+    h("div.ex-row", null, exLine(w), h("button.icon-btn.small", { "aria-label": "Play example", onclick: () => Speech.say(exPlain(w), rate()) }, "🔊")),
+    h("div.en.dim" + (blurEn ? ".blur" : ""), { onclick: (e) => e.currentTarget.classList.remove("blur") }, w.exEn));
+}
+function wordHead(w) { return h("div.word-big", { lang: "ko", onclick: () => Speech.say(w.ko, rate()) }, w.ko); }
+function wordMic(w, fb, onGood) {
+  if (state.settings.quiet || !Speech.canListen()) return null;
+  const form = exParts(w).form;
+  return micButton(form && form !== w.ko ? [w.ko, form] : [w.ko], (r) => {
+    if (r.error) { fb.className = "feedback bad"; return (fb.textContent = micErrorText(r.error)); }
+    const v = verdict(r, r.index === 1 ? form : w.ko);
+    fb.className = "feedback " + v.lvl; fb.replaceChildren(...v.el);
+    if (v.lvl === "ok") onGood?.(r); else Speech.say(w.ko, rate());
+  }, "🎤 Say the word");
+}
+
+function wordIntroCard(card) {
+  const w = card.spec.item, fb = h("div.feedback");
+  card.onShow = () => state.settings.autoplay && Speech.say(w.ko, rate());
+  return shell(card, "New word",
+    wordHead(w), en(w.en), audioBtns(w.ko), exBox(w),
+    wordMic(w, fb), fb,
+    h("div.grades", null,
+      h("button.btn.ghost", { onclick: () => { introduceCard(card, true); advance(); } }, "I know this"),
+      h("button.btn.primary", { onclick: () => { introduceCard(card, false); advance(); } }, "Got it ↑")));
+}
+
+// wmean: Korean → meaning · wlisten: hear it → meaning · wrecall: meaning → Korean
+function wordChoiceCard(card) {
+  const w = card.spec.item, mode = card.spec.type, after = h("div.reveal");
+  const dis = wordDistractors(w);
+  const play = () => Speech.say(w.ko, rate());
+  const done = (ok) => {
+    after.replaceChildren(mode === "wrecall" ? null : h("div.word-mid", { lang: "ko" }, w.ko), mode === "wrecall" ? null : en(w.en, "dim"), exBox(w));
+    play(); finish(card, ok ? 3 : 1);
+  };
+  if (mode === "wrecall") {
+    return shell(card, "Which word?",
+      h("div.prompt", null, "Which Korean word means…"), h("div.en-prompt.big-en", null, w.en),
+      choices(card, w.ko, dis.map((x) => x.ko), done, ".ko-choice"), after);
+  }
+  if (mode === "wlisten") card.onShow = () => setTimeout(play, 250);
+  else card.onShow = () => state.settings.autoplay && play();
+  return shell(card, mode === "wlisten" ? "Hear the word" : "What does it mean?",
+    mode === "wlisten" ? h("div.prompt", null, "Listen. What does this word mean?") : null,
+    mode === "wlisten" ? h("button.big-play", { onclick: play, "aria-label": "Play" }, "🔊") : wordHead(w),
+    choices(card, w.en, dis.map((x) => x.en), done), after);
+}
+
+// the word blanked out of its example sentence; options are other words' dictionary forms
+function wordClozeCard(card) {
+  const w = card.spec.item, p = exParts(w), after = h("div.reveal");
+  const line = exLine(w, "blank"), blank = line.querySelector(".blank");
+  return shell(card, "Which word fits?",
+    h("div.prompt", null, "Pick the word that fits the gap"), line,
+    h("div.en.dim.blur", { onclick: (e) => e.currentTarget.classList.remove("blur") }, w.exEn),
+    choices(card, w.ko, wordDistractors(w, 3, { sameClass: true, crossTopic: true }).map((x) => x.ko), (ok) => {
+      blank.textContent = p.form; blank.className = "blank " + (ok ? "hit" : "miss");
+      card.el.querySelector(".blur")?.classList.remove("blur");
+      after.replaceChildren(h("div.dim.small", null, w.ko, " = ", w.en));
+      Speech.say(exPlain(w), rate()); finish(card, ok ? 3 : 1);
+    }, ".ko-choice"), after);
+}
+
+// build the word from syllable tiles
+function wordSpellCard(card) {
+  const w = card.spec.item, syl = [...w.ko];
+  const extra = [];
+  for (const x of shuffle(WORDS)) {
+    if (extra.length >= 3) break;
+    const c = pick([...x.ko.replace(/\s/g, "")]);
+    if (!syl.includes(c) && !extra.includes(c) && /[가-힣]/.test(c)) extra.push(c);
+  }
+  const answer = h("div.answer.spell"), pool = h("div.tiles"), fb = h("div.feedback");
+  const check = () => {
+    if (answer.children.length !== syl.length) return;
+    const got = [...answer.children].map((b) => b.textContent).join(""), ok = got === w.ko;
+    [...answer.children].forEach((b, i) => b.classList.toggle("wrong", b.textContent !== syl[i]));
+    card.el.querySelectorAll(".tile").forEach((b) => (b.disabled = true));
+    fb.className = "feedback " + (ok ? "ok" : "bad");
+    fb.replaceChildren(h("div", null, ok ? "✓ 맞아요!" : "It's:"), h("div.word-mid", { lang: "ko" }, w.ko), exBox(w));
+    Speech.say(w.ko, rate()); finish(card, ok ? 3 : 1);
+  };
+  for (const c of shuffle([...syl, ...extra])) {
+    const b = h("button.tile", { onclick: () => { if (card.answered) return; (b.parentNode === pool ? answer : pool).append(b); check(); } }, c);
+    pool.append(b);
+  }
+  return shell(card, "Spell it", h("div.prompt", null, "Build the Korean word for…"), h("div.en-prompt.big-en", null, w.en),
+    h("div.hint.dim.small", null, `${syl.length} syllables`), answer, pool, fb);
+}
+
+// produce it: say the word (checked by the mic) or say it in your head and reveal
+function wordSayCard(card) {
+  const w = card.spec.item, out = h("div.reveal"), fb = h("div.feedback");
+  const reveal = () => {
+    showBtn.remove();
+    out.replaceChildren(wordHead(w), exBox(w), grades(card, [1, 2, 3, 4]));
+    Speech.say(w.ko, rate());
+  };
+  const showBtn = h("button.btn.ghost", { onclick: reveal }, state.settings.quiet ? "Say it in your head, then reveal" : "Show answer");
+  const mic = wordMic(w, fb, (r) => {
+    if (card.answered) return;
+    showBtn.remove(); mic?.remove();
+    out.replaceChildren(wordHead(w), exBox(w));
+    Speech.say(w.ko, rate()); finish(card, r.score >= 0.97 ? 4 : 3);
+  });
+  return shell(card, "Say the word", h("div.prompt", null, "How do you say…"), h("div.en-prompt.big-en", null, w.en),
+    w.exEn ? h("div.dim.small", null, "as in: “", w.exEn, "”") : null,
+    mic, fb, showBtn, out);
+}
+
+// ───────────────────────── skim (easy phrases below your level) ─────────────────────────
+function skimCard(card) {
+  const ids = card.spec.ids, sc = SCENE[ITEMS[ids[0]].scene], marked = new Set();
+  const msg = h("div.feedback");
+  const rows = ids.map((id) => {
+    const it = ITEMS[id], enEl = h("div.skim-en.blur", null, fill(it.en));
+    const row = h("button.skim-row", { onclick: () => {
+      if (card.answered) return;
+      const on = !marked.has(id);
+      on ? marked.add(id) : marked.delete(id);
+      row.classList.toggle("new", on); enEl.classList.remove("blur");
+      if (on) Speech.say(fill(it.ko), rate());
+    } }, h("div.skim-ko", { lang: "ko" }, fill(it.ko)), enEl);
+    return row;
+  });
+  card.finishSkim = () => {
+    if (card.answered) return;
+    card.answered = true;
+    for (const id of ids) marked.has(id) ? introduce(id, false) : introduce(id, true, 12, false);
+    today().cards++; state.total++; afterAnswer(sc.id); save(); hud();
+    card.el.querySelectorAll(".skim-row").forEach((b) => (b.disabled = true));
+    msg.className = "feedback ok";
+    msg.textContent = marked.size ? `${marked.size} added to practice, ${ids.length - marked.size} marked known.` : "All known. Nice!";
+  };
+  return h("section.card", null, h("div.card-in", null,
+    h("div.card-top", null, h("span.chip", null, sc.icon + " " + sc.ko), h("span.label", null, "Quick check")),
+    h("div.card-body", null,
+      h("div.prompt", null, "Know these already? Tap any that are new to you."),
+      h("div.skim", null, rows), msg,
+      h("button.btn.primary", { onclick: () => { card.finishSkim(); advance(); } }, "Done, I know the rest ↑")),
+    h("div.swipe-hint", null, "swipe up ↑ · untapped = known")));
 }
 
 function clozeCard(card) {
@@ -599,10 +948,10 @@ function introCard(card) {
     ko(it.ko, "big"), en(it.en), audioBtns(fill(it.ko)),
     glossList(it.gl), patternPills(it),
     !it.hear && !state.settings.quiet && Speech.canListen() ? micButton(it.ko, (r) => {
-      fb.className = "feedback";
-      if (r.error) return (fb.textContent = micErrorText(r.error));
-      fb.replaceChildren(diffView(r.text, it.ko), h("div", null, r.score >= 0.92 ? "✓ Sounds right!" : r.score >= 0.65 ? "Close! Listen once more and try again." : `Heard: “${r.text}”`));
-      fb.classList.add(r.score >= 0.92 ? "ok" : "meh");
+      if (r.error) { fb.className = "feedback bad"; return (fb.textContent = micErrorText(r.error)); }
+      const v = verdict(r, it.ko, { meh: "Close! Listen once more and try again." });
+      fb.className = "feedback " + v.lvl; fb.replaceChildren(...v.el);
+      if (v.lvl !== "ok") Speech.say(fill(it.ko), state.settings.rate);
     }, "🎤 Try saying it") : null,
     fb,
     h("div.grades", null,
@@ -694,20 +1043,14 @@ function sayCard(card) {
   const showBtn = h("button.btn.ghost", { onclick: () => reveal() }, state.settings.quiet ? "Say it in your head, then reveal" : "Show answer");
   const mic = !state.settings.quiet && Speech.canListen() ? micButton(it.ko, (r) => {
     if (card.answered) return;
-    fb.className = "feedback";
-    if (r.error) return (fb.textContent = micErrorText(r.error));
-    fb.replaceChildren(h("div.heard", null, "You said: “", r.text, "”"), diffView(r.text, it.ko));
-    if (r.score >= 0.92) {
-      fb.classList.add("ok"); fb.prepend(h("div", null, "✓ 완벽해요! Perfect."));
+    if (r.error) { fb.className = "feedback bad"; return (fb.textContent = micErrorText(r.error)); }
+    const v = verdict(r, it.ko, { bad: "✗ Not quite. Try again, or show the answer." });
+    fb.className = "feedback " + v.lvl; fb.replaceChildren(...v.el);
+    if (v.lvl === "ok") {
       out.replaceChildren(audioBtns(fill(it.ko))); showBtn.remove(); mic.remove();
       Speech.say(fill(it.ko), state.settings.rate);
       finish(card, r.score >= 0.97 ? 4 : 3);
-    } else if (r.score >= 0.65) {
-      fb.classList.add("meh"); fb.prepend(h("div", null, "Close! Red parts were missed."));
-      reveal([1, 2, 3]);
-    } else {
-      fb.classList.add("bad"); fb.prepend(h("div", null, "Not quite. Try again, or reveal."));
-    }
+    } else if (v.lvl === "meh") reveal([1, 2, 3]);
   }) : null;
   return shell(card, LABEL.say,
     h("div.prompt", null, "How do you say…"),
@@ -765,10 +1108,11 @@ function dialogCard(card) {
     const t = d.turns[i];
     opts.replaceChildren(...shuffle(t.opts).map((o) => h("button.choice.ko-choice", { lang: "ko", onclick: (e) => choose(o, e.currentTarget) }, fill(o.ko))));
     if (!state.settings.quiet && Speech.canListen()) opts.append(micButton(t.opts.map((o) => o.ko), (r) => {
-      if (r.error) return (fb.textContent = micErrorText(r.error));
-      if (r.score < 0.55) { fb.className = "feedback bad"; fb.textContent = `Heard “${r.text}”. Didn't match a reply; try again or tap one.`; return; }
+      if (r.error) { fb.className = "feedback bad"; return (fb.textContent = micErrorText(r.error)); }
+      if (r.score < 0.55) { fb.className = "feedback bad"; fb.textContent = `✗ Heard “${r.text}”, which doesn't match any reply. Try again or tap one.`; return; }
       const o = t.opts[r.index];
       choose(o, [...opts.querySelectorAll(".choice")].find((b) => b.textContent === fill(o.ko)));
+      if (o.ok) { fb.className = "feedback ok"; fb.textContent = `🎤 ✓ Understood: “${r.text}” (${Math.round(r.score * 100)}%)`; }
     }, "🎤 Say your reply"));
     function choose(o, btn) {
       if (o.ok) {
@@ -811,16 +1155,6 @@ function eventCard(card) {
       e.action ? h("button.btn.primary", { onclick: (ev) => { ev.currentTarget.disabled = true; e.action.fn(); advance(); } }, e.action.label) : null),
     h("div.swipe-hint", null, "swipe up ↑")));
 }
-function missionCard(card) {
-  const m = card.spec.m;
-  const body = h("div.card-body", null, h("div.big-icon", null, "🎯"), h("div.label", null, "Real-world mission"), h("h2", null, m.ko), h("p", null, m.en),
-    h("div.grades", null,
-      h("button.btn.ghost", { onclick: () => advance() }, "Later"),
-      h("button.btn.primary", { onclick: (e) => { logMission(m.id); e.currentTarget.parentNode.replaceWith(h("p.ok-text", null, "대박! Logged. That's worth more than 100 cards.")); } }, "I did it ✓")),
-    h("p.dim.small", null, "Speaking to real people is what turns app practice into fluency."));
-  return h("section.card.mission", null, h("div.card-in", null, body, h("div.swipe-hint", null, "swipe up ↑")));
-}
-function logMission(id) { (state.missions[id] = state.missions[id] || []).push(Date.now()); save(); }
 
 // ───────────────────────── HUD ─────────────────────────
 function hud() {
@@ -831,17 +1165,20 @@ function hud() {
   $("#streak").textContent = "🔥 " + streak();
   $("#quiet").textContent = state.settings.quiet ? "🤫" : "🎤";
   $("#quiet").title = state.settings.quiet ? "Quiet mode: no speaking cards" : "Speaking on";
-  const f = state.focus;
-  $("#focus").textContent = f ? (f.type === "scene" ? SCENE[f.id].icon + " " + SCENE[f.id].en : "📐 " + PAT[f.id].ko) : "🏘️ All scenes";
+  const f = state.focus, fc = $("#focus");
+  fc.classList.toggle("mode", !!session);
+  fc.textContent = session ? `🔁 ${session.title} · ${sessionLeft()} left ✕`
+    : f ? (f.type === "scene" ? SCENE[f.id].icon + " " + SCENE[f.id].en : f.type === "topic" ? TOPIC[f.id].icon + " " + TOPIC[f.id].en : "📐 " + PAT[f.id].ko) : "🏘️ " + LEVELS[state.settings.level || 2];
 }
 $("#quiet").onclick = () => {
   state.settings.quiet = !state.settings.quiet; save(); hud(); refreshAhead();
   toast(state.settings.quiet ? "Quiet mode: no speaking cards (good for the bus)" : "Speaking cards are back");
 };
-$("#focus").onclick = () => showView("map");
-function toast(msg) {
+$("#focus").onclick = () => { if (session) { endSession("Review stopped. Back to your normal mix."); refreshAhead(); } else showView("map"); };
+$("#gear").onclick = () => showView(view === "settings" ? "feed" : "settings");
+function toast(msg, ms = 2200) {
   const t = $("#toast"); t.textContent = msg; t.classList.add("show");
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2200);
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms);
 }
 
 // time spent practicing (only while the feed is on screen)
@@ -853,11 +1190,10 @@ function showView(v) {
   view = v;
   document.querySelectorAll(".view").forEach((el) => el.classList.toggle("on", el.id === "view-" + v));
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
+  $("#gear").classList.toggle("on", v === "settings");
   if (v !== "feed") { Speech.stop(); Speech.stopListening(); }
-  if (v === "map") renderMap();
-  if (v === "grammar") renderGrammar();
-  if (v === "missions") renderMissions();
-  if (v === "settings") renderSettings();
+  ({ map: renderMap, grammar: renderGrammar, words: renderWords, review: renderReview, progress: renderProgress, settings: renderSettings })[v]?.();
+  $("#view-" + v).scrollTop = 0;
 }
 document.querySelectorAll("nav button").forEach((b) => (b.onclick = () => showView(b.dataset.v)));
 
@@ -869,17 +1205,26 @@ function setFocus(f) {
 function renderMap() {
   const knownN = Object.keys(state.items).filter(known).length;
   const patsKnown = PATTERNS.filter((p) => (BY_PAT[p.id] || []).filter(known).length >= 3).length;
-  const missionsN = Object.values(state.missions).reduce((a, b) => a + b.length, 0);
   const el = $("#view-map");
   el.replaceChildren(
     h("h1", null, "우리 동네 ", h("span.dim", null, "your neighborhood")),
     h("div.stats", null,
-      stat("🔥", streak(), "day streak"),
-      stat("⏱️", Math.round(today().secs / 60), "min today"),
-      stat("💬", knownN, "phrases known"),
-      stat("📐", patsKnown, "patterns"),
-      stat("🎯", missionsN, "missions")),
-    h("button.focus-all" + (state.focus ? "" : ".on"), { onclick: () => { setFocus(null); renderMap(); } }, "🏘️ All scenes, in order", state.focus ? "" : " ✓"),
+      stat("💬", knownN - wordsKnown(), "phrases known"),
+      stat("📚", wordsKnown(), "words known"),
+      stat("📐", patsKnown, "patterns")),
+    h("button.focus-all" + (state.focus ? "" : ".on"), { onclick: () => { setFocus(null); renderMap(); } }, `🏘️ Normal mix (${LEVELS[state.settings.level || 2]})`, state.focus ? "" : " ✓"),
+    h("h3", null, "단어 ", h("span.dim", null, "vocabulary")),
+    h("div.topics", null, TOPICS.filter((t) => BY_TOPIC[t.id].length).map((t) => {
+      const ids = BY_TOPIC[t.id], seen = ids.filter((i) => state.items[i]).length;
+      const m = ids.reduce((a, i) => a + weight(i), 0) / ids.length;
+      const focused = state.focus?.type === "topic" && state.focus.id === t.id;
+      return h("div.topic" + (focused ? ".focused" : ""), { onclick: () => topicSheet(t) },
+        h("div.topic-name", null, t.icon, " ", h("b", { lang: "ko" }, t.ko), " ", h("span.dim", null, t.en)),
+        h("div.bar", null, h("div.bar-seen", { style: `width:${(seen / ids.length) * 100}%` }), h("div.bar-known", { style: `width:${m * 100}%` })),
+        h("div.topic-foot", null, h("span.dim.small", null, `${seen}/${ids.length}`),
+          h("button.focus-btn.small" + (focused ? ".on" : ""), { onclick: (e) => { e.stopPropagation(); setFocus(focused ? null : { type: "topic", id: t.id }); renderMap(); } }, focused ? "Focused" : "Focus")));
+    })),
+    h("h3", null, "장면 ", h("span.dim", null, "scenes")),
     h("div.scenes", null, SCENES.map((sc) => {
       const st = sceneStats(sc.id), lvl = friendLevel(sc.id);
       const focused = state.focus?.type === "scene" && state.focus.id === sc.id;
@@ -914,12 +1259,24 @@ function sceneSheet(sc) {
     })));
 }
 
+function topicSheet(t) {
+  sheet(
+    h("h2", null, t.icon, " ", h("span", { lang: "ko" }, t.ko), " · ", t.en),
+    h("p.dim", null, `${BY_TOPIC[t.id].filter((i) => state.items[i]).length}/${BY_TOPIC[t.id].length} met · ${BY_TOPIC[t.id].filter(known).length} known`),
+    h("div.phrases", null, BY_TOPIC[t.id].map((id) => {
+      const w = ITEMS[id], r = state.items[id];
+      return h("div.phrase", { onclick: () => Speech.say(w.ko, rate()) },
+        h("span.dot" + (!r ? "" : known(id) ? (r.s >= 7 ? ".mature" : ".known") : ".learning")),
+        h("span.p-ko", { lang: "ko" }, w.ko), h("span.p-en", null, w.en));
+    })));
+}
+
 function renderGrammar() {
   const el = $("#view-grammar");
-  const lvls = { 1: "Level 1 · the skeleton", 2: "Level 2 · tenses, wants & requests", 3: "Level 3 · sounding natural" };
+  const lvls = { 1: "Level 1 · the skeleton", 2: "Level 2 · tenses, wants & requests", 3: "Level 3 · sounding natural", 4: "Level 4 · intermediate" };
   el.replaceChildren(h("h1", null, "문법 ", h("span.dim", null, "patterns")),
     h("p.dim", null, "Every pattern is taught inside real phrases. Tap one to see it in action, or focus it to get its phrases first."),
-    ...[1, 2, 3].map((l) => h("section", null, h("h3", null, lvls[l]),
+    ...(state.settings.level >= 3 ? [4, 3, 2, 1] : [1, 2, 3, 4]).map((l) => h("section", null, h("h3", null, lvls[l]),
       PATTERNS.filter((p) => p.lvl === l).map((p) => {
         const ids = BY_PAT[p.id] || [], k = ids.filter(known).length;
         const focused = state.focus?.type === "pattern" && state.focus.id === p.id;
@@ -933,17 +1290,310 @@ function renderGrammar() {
       }))));
 }
 
-function renderMissions() {
-  const el = $("#view-missions");
-  el.replaceChildren(h("h1", null, "미션 ", h("span.dim", null, "real-world missions")),
-    h("p.dim", null, "The app gets you ready; real conversations make you fluent. Log a mission when you do it."),
-    h("div.missions", null, MISSIONS.map((m) => {
-      const log = state.missions[m.id] || [];
-      return h("div.mission-row", null,
-        h("div", null, h("b", { lang: "ko" }, m.ko), " ", h("span.lvl", null, "★".repeat(m.lvl)), h("div.small", null, m.en),
-          log.length ? h("div.dim.small", null, `Done ${log.length}× · last ${new Date(log[log.length - 1]).toLocaleDateString()}`) : null),
-        h("button.btn" + (log.length ? "" : ".primary"), { onclick: () => { logMission(m.id); toast("대박! Mission logged 🎯"); renderMissions(); } }, "Did it ✓"));
-    })));
+// ───────────────────────── 단어장 · My words ─────────────────────────
+let wordsUI = { q: "", filter: "all", limit: 120, open: null };
+function nextLabel(r) {
+  if (!r) return "not met";
+  const d = (r.due - Date.now()) / DAY;
+  return d <= 0 ? "due" : d < 1 / 24 ? Math.max(1, Math.round(d * 1440)) + "m" : d < 1 ? Math.round(d * 24) + "h" : Math.round(d) + "d";
+}
+function renderWords() {
+  const el = $("#view-words"), u = wordsUI;
+  const all = Object.values(ITEMS);
+  const pool = {
+    all: all.filter((it) => state.items[it.id] || it.custom),
+    learning: all.filter((it) => state.items[it.id] && !known(it.id)),
+    known: all.filter((it) => known(it.id)),
+    mine: all.filter((it) => it.custom),
+    unmet: all.filter((it) => !state.items[it.id] && !it.custom),
+  }[u.filter];
+  const label = (it) => it.kind === "d" ? "💬 " + it.title : fill(it.ko);
+  const search = h("input.search", { type: "search", placeholder: "Search Korean or English", value: u.q, oninput: (e) => { u.q = e.target.value; u.limit = 120; renderList(); } });
+  const chips = h("div.filter-chips", null, [["all", "All met"], ["learning", "Learning"], ["known", "Known"], ["mine", "⭐ Mine"], ["unmet", "Not met yet"]].map(([k, t]) =>
+    h("button.fchip" + (u.filter === k ? ".on" : ""), { onclick: () => { u.filter = k; u.limit = 120; renderWords(); } }, t)));
+  const list = h("div.wlist");
+  function renderList() {
+    const qq = u.q.trim().toLowerCase();
+    const rows = pool.filter((it) => !qq || label(it).toLowerCase().includes(qq) || fill(it.en || "").toLowerCase().includes(qq))
+      .sort((a, b) => (state.items[b.id]?.last || (b.custom ? Infinity : 0)) - (state.items[a.id]?.last || (a.custom ? Infinity : 0)));
+    list.replaceChildren(
+      h("div.dim.small", null, `${rows.length} ${rows.length === 1 ? "item" : "items"}`),
+      ...rows.slice(0, u.limit).map(wordRow),
+      rows.length > u.limit ? h("button.btn.wide", { onclick: () => { u.limit += 200; renderList(); } }, `Show more (${rows.length - u.limit})`) : null,
+      !rows.length ? h("p.dim", null, u.filter === "mine" ? "No words of your own yet. Tap ＋ Add a word for anything you hear and want to keep." : "Nothing here yet.") : null);
+  }
+  el.replaceChildren(
+    h("h1", null, "단어장 ", h("span.dim", null, "my words")),
+    h("div.words-top", null, search, h("button.btn.primary", { onclick: () => wordForm() }, "＋ Add a word")),
+    chips, list);
+  renderList();
+}
+function wordRow(it) {
+  const r = state.items[it.id], open = wordsUI.open === it.id;
+  const dot = h("span.dot" + (!r ? "" : known(it.id) ? (r.s >= 7 ? ".mature" : ".known") : ".learning"));
+  const say = () => Speech.say(it.kind === "w" ? it.ko : fill(it.ko || ""), rate());
+  const row = h("div.wrow" + (open ? ".open" : ""), null,
+    h("button.wrow-main", { onclick: () => { wordsUI.open = open ? null : it.id; if (!open && it.kind !== "d") say(); row.replaceWith(wordRow(it)); } },
+      dot,
+      h("span.wrow-ko", { lang: "ko" }, it.kind === "d" ? "💬 " + it.title : fill(it.ko)),
+      h("span.wrow-next.dim.small", null, (it.custom ? "⭐ " : "") + nextLabel(r)),
+      h("span.wrow-en.dim", null, it.kind === "d" ? SCENE[it.scene].en + " dialogue" : fill(it.en))));
+  if (open) {
+    const det = h("div.wrow-detail");
+    if (it.kind === "w") { if (it.ex) det.append(exBox(it)); }
+    else if (it.kind === "s") det.append(glossList(it.gl) || "", patternPills(it) || "");
+    if (it.kind !== "d") det.append(h("div.btn-row", null, h("button.btn.small", { onclick: say }, "🔊 Play"),
+      it.custom ? h("button.btn.small", { onclick: () => wordForm(it) }, "✏️ Edit") : null,
+      it.custom ? h("button.btn.small.danger", { onclick: () => deleteCustom(it) }, "🗑 Delete") : null));
+    if (r) det.append(h("div.dim.small", null, `Practiced ${r.reps}× · missed ${r.wrong || 0}× · next: ${nextLabel(r)}`));
+    row.append(det);
+  }
+  return row;
+}
+
+// your own words: stored in state.custom, studied like the built-in vocabulary
+const MINE = { id: "mine", ko: "내 단어", en: "My words", icon: "⭐" };
+TOPICS.push(MINE); TOPIC.mine = MINE; BY_TOPIC.mine = [];
+function autoBracket(ko, ex) {
+  if (!ex || /\[.+?\]/.test(ex)) return ex || "";
+  const stem = ko.replace(/\s/g, "").replace(/다$/, "").slice(0, Math.max(1, ko.replace(/다$/, "").length - 1));
+  if (!/다$/.test(ko) && ex.includes(ko)) return ex.replace(ko, "[" + ko + "]");    // a noun: just the word, not its particle
+  const toks = ex.split(" ");
+  const i = toks.findIndex((t) => t.includes(ko) || (stem && t.includes(stem)));
+  if (i < 0) return ex;
+  const m = toks[i].match(/^(.*?)([.,!?~…]*)$/);
+  toks[i] = "[" + m[1] + "]" + m[2];
+  return toks.join(" ");
+}
+function registerCustom(c) {
+  const w = ITEMS[c.id] || { id: c.id, kind: "w", topic: "mine", custom: true };
+  Object.assign(w, { ko: c.ko, en: c.en, ex: autoBracket(c.ko, c.ex), exEn: c.exEn || "" });
+  if (!ITEMS[c.id]) { ITEMS[c.id] = w; WORDS.push(w); BY_TOPIC.mine.push(c.id); }
+  return w;
+}
+function wordForm(edit) {
+  const c = edit ? state.custom.find((x) => x.id === edit.id) : null;
+  const f = (ph, val, lang) => h("input.name-in", { placeholder: ph, value: val || "", lang: lang || null });
+  const koIn = f("Korean, e.g. 눈치", c?.ko, "ko"), enIn = f("Meaning, e.g. reading the room", c?.en);
+  const exIn = f("Example sentence (optional)", c?.ex, "ko"), exEnIn = f("Example in English (optional)", c?.exEn);
+  const err = h("div.warn.small");
+  sheet(h("h2", null, edit ? "Edit word" : "＋ Add a word"),
+    h("p.dim.small", null, "Heard something you want to keep? It joins your feed with the same exercises as the built-in words."),
+    h("div.form", null, koIn, enIn, exIn, exEnIn,
+      h("p.dim.small", null, "Tip: put the word in [brackets] inside the example to get fill-in-the-gap practice too. Otherwise Dongne tries to find it."),
+      err,
+      h("button.btn.primary.wide", { onclick: (e) => {
+        const ko = koIn.value.trim(), en = enIn.value.trim();
+        if (!ko || !en) return (err.textContent = "Korean and meaning are both needed.");
+        const data = { ko, en, ex: exIn.value.trim(), exEn: exEnIn.value.trim() };
+        if (c) Object.assign(c, data); else state.custom.push({ id: "c:" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), added: Date.now(), ...data });
+        registerCustom(c || state.custom[state.custom.length - 1]);
+        save(); e.currentTarget.closest(".sheet-bg").remove();
+        toast(c ? "Saved" : `Added “${ko}”. It'll show up in your feed soon.`);
+        if (!c) { wordsUI.filter = "mine"; if (started) refreshAhead(); }
+        renderWords();
+      } }, edit ? "Save" : "Add to my words")));
+  setTimeout(() => koIn.focus(), 50);
+}
+function deleteCustom(it) {
+  if (!confirm(`Delete “${it.ko}” and its progress?`)) return;
+  state.custom = state.custom.filter((x) => x.id !== it.id);
+  delete state.items[it.id]; delete ITEMS[it.id];
+  WORDS.splice(WORDS.indexOf(it), 1); BY_TOPIC.mine.splice(BY_TOPIC.mine.indexOf(it.id), 1);
+  save(); wordsUI.open = null; if (started) refreshAhead(); renderWords();
+}
+for (const c of state.custom || []) registerCustom(c);
+
+// ───────────────────────── 기록 · Progress ─────────────────────────
+const SVGNS = "http://www.w3.org/2000/svg";
+function s(tag, attrs = {}, ...kids) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) el.setAttribute(k, v);
+  for (const k of kids.flat()) if (k != null) el.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return el;
+}
+// a bar with 4px rounded top corners, square on the baseline
+function barPath(x, y, w, hgt, r = 4) {
+  if (hgt <= 0) return "";
+  r = Math.min(r, w / 2, hgt);
+  return `M${x},${y + hgt}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + hgt}Z`;
+}
+const dayKey = (offset) => ymd(Date.now() + offset * DAY);
+const shortDate = (k) => new Date(k + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const weekday = (k) => new Date(k + "T12:00").toLocaleDateString(undefined, { weekday: "short" });
+function bestStreak() {
+  const goal = state.settings.goal, keys = Object.keys(state.days).filter((k) => state.days[k].cards >= goal).sort();
+  let best = 0, run = 0, prev = null;
+  for (const k of keys) { run = prev && (new Date(k + "T12:00") - new Date(prev + "T12:00")) / DAY === 1 ? run + 1 : 1; best = Math.max(best, run); prev = k; }
+  return best;
+}
+// one readout line under a chart; hover or tap a mark to fill it
+function readout(def) { const el = h("div.readout", null, def); el.def = def; return el; }
+function hoverMark(mark, out, text) {
+  const show = () => { out.textContent = text; mark.classList.add("hot"); };
+  const hide = () => { out.textContent = out.def; mark.classList.remove("hot"); };
+  mark.addEventListener("pointerenter", show); mark.addEventListener("pointerleave", hide); mark.addEventListener("click", show);
+}
+
+function heatmap() {
+  const goal = state.settings.goal, weeks = 12;
+  const start = new Date(); start.setHours(12, 0, 0, 0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7) - (weeks - 1) * 7);      // Monday, 11 weeks back
+  const cell = 14, gap = 3, W = weeks * (cell + gap), H = 7 * (cell + gap);
+  const out = readout("Tap a day to see it");
+  const svg = s("svg", { viewBox: `0 0 ${W + 18} ${H}`, class: "heat", role: "img", "aria-label": "Practice calendar, last 12 weeks" });
+  ["M", "", "W", "", "F", "", ""].forEach((t, i) => t && svg.append(s("text", { x: 0, y: i * (cell + gap) + cell - 3, class: "ax" }, t)));
+  for (let w = 0; w < weeks; w++) for (let d = 0; d < 7; d++) {
+    const dt = new Date(start); dt.setDate(start.getDate() + w * 7 + d);
+    if (dt > new Date()) continue;
+    const k = ymd(dt.getTime()), day = state.days[k], n = day?.cards || 0;
+    const lvl = !n ? 0 : n < goal * 0.25 ? 1 : n < goal * 0.5 ? 2 : n < goal ? 3 : 4;
+    const r = s("rect", { x: 18 + w * (cell + gap), y: d * (cell + gap), width: cell, height: cell, rx: 3, class: "hc l" + lvl });
+    hoverMark(r, out, `${shortDate(k)}: ${n} cards${day?.secs ? ` · ${Math.round(day.secs / 60)} min` : ""}${n >= goal ? " · goal met 🔥" : ""}`);
+    svg.append(r);
+  }
+  const legend = h("div.heat-legend.dim.small", null, "Less ", [0, 1, 2, 3, 4].map((l) => h("span.hc-key.l" + l)), " More (goal = ", goal, " cards)");
+  return [svg, legend, out];
+}
+
+function knownChart() {
+  const keys = Object.keys(state.days).filter((k) => state.days[k].knownW != null).sort();
+  if (keys.length < 2) return [h("p.dim.small", null, "This chart fills in as you practice: one point per day.")];
+  const pts = keys.map((k) => ({ k, w: state.days[k].knownW, p: state.days[k].knownP }));
+  const W = 320, H = 150, L = 30, R = 64, T = 10, B = 22;
+  const max = Math.max(5, ...pts.map((d) => Math.max(d.w, d.p)));
+  const raw = max / 4, mag = Math.pow(10, Math.floor(Math.log10(raw))), nr = raw / mag;
+  const step = Math.max(1, (nr <= 1 ? 1 : nr <= 2 ? 2 : nr <= 5 ? 5 : 10) * mag);     // 3–5 gridlines
+  const top = Math.ceil(max / step) * step;
+  const x = (i) => L + (i / (pts.length - 1)) * (W - L - R), y = (v) => T + (1 - v / top) * (H - T - B);
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, class: "linechart", role: "img", "aria-label": "Words and phrases known over time" });
+  for (let v = 0; v <= top; v += step) svg.append(s("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: v ? "grid" : "base" }), s("text", { x: L - 6, y: y(v) + 4, class: "ax", "text-anchor": "end" }, v));
+  svg.append(s("text", { x: L, y: H - 6, class: "ax" }, shortDate(pts[0].k)), s("text", { x: W - R, y: H - 6, class: "ax", "text-anchor": "end" }, shortDate(pts[pts.length - 1].k)));
+  const series = [["w", "Words", "c1"], ["p", "Phrases", "c2"]];
+  const last = pts[pts.length - 1];
+  // direct labels at the line ends, nudged apart if they'd collide
+  let ly = { w: y(last.w), p: y(last.p) };
+  if (Math.abs(ly.w - ly.p) < 14) { const mid = (ly.w + ly.p) / 2, up = ly.w < ly.p ? "w" : "p"; ly[up] = mid - 7; ly[up === "w" ? "p" : "w"] = mid + 7; }
+  for (const [key, name, cls] of series) {
+    svg.append(s("polyline", { points: pts.map((d, i) => `${x(i)},${y(d[key])}`).join(" "), class: "ln " + cls }));
+    svg.append(s("circle", { cx: x(pts.length - 1), cy: y(last[key]), r: 4, class: "dot-end " + cls }));
+    svg.append(s("text", { x: W - R + 8, y: ly[key] + 4, class: "lbl" }, `${name} ${last[key]}`));
+  }
+  // crosshair + readout
+  const out = readout(`Today: ${last.w} words · ${last.p} phrases known`);
+  const cross = s("line", { y1: T, y2: H - B, class: "cross", visibility: "hidden" });
+  const hits = s("rect", { x: L, y: T, width: W - L - R, height: H - T - B, fill: "transparent" });
+  const move = (e) => {
+    const r = svg.getBoundingClientRect(), px = ((e.clientX - r.left) / r.width) * W;
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round(((px - L) / (W - L - R)) * (pts.length - 1))));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    out.textContent = `${shortDate(pts[i].k)}: ${pts[i].w} words · ${pts[i].p} phrases known`;
+  };
+  hits.addEventListener("pointermove", move); hits.addEventListener("pointerdown", move);
+  hits.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); out.textContent = out.def; });
+  svg.append(cross, hits);
+  const legend = h("div.chart-legend.small", null, series.map(([, name, cls]) => h("span", null, h("i.key." + cls), name)));
+  const table = h("details.chart-table.small", null, h("summary", null, "Show as table"),
+    h("table", null, h("tr", null, h("th", null, "Day"), h("th", null, "Words"), h("th", null, "Phrases")),
+      pts.slice(-14).reverse().map((d) => h("tr", null, h("td", null, shortDate(d.k)), h("td", null, d.w), h("td", null, d.p)))));
+  return [legend, svg, out, table];
+}
+
+// simple single-series bar chart: [{label, value, note}]
+function bars(data, unit, aria) {
+  const W = 320, H = 120, T = 16, B = 20, n = data.length, slot = W / n, bw = Math.min(28, slot * 0.55);
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const out = readout("Tap a bar for details");
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, class: "barchart", role: "img", "aria-label": aria });
+  svg.append(s("line", { x1: 0, x2: W, y1: H - B, y2: H - B, class: "base" }));
+  const peak = data.reduce((a, d, i) => (d.value > data[a].value ? i : a), 0);
+  data.forEach((d, i) => {
+    const hgt = (d.value / max) * (H - T - B), x = i * slot + (slot - bw) / 2;
+    const g = s("g", { class: "bar-g" });
+    g.append(s("rect", { x: i * slot, y: 0, width: slot, height: H, fill: "transparent" }));     // big hit target
+    g.append(s("path", { d: barPath(x, H - B - hgt, bw, hgt), class: "bar c1" }));
+    if (i === peak && d.value) g.append(s("text", { x: x + bw / 2, y: H - B - hgt - 4, class: "lbl", "text-anchor": "middle" }, d.value));
+    g.append(s("text", { x: x + bw / 2, y: H - 5, class: "ax", "text-anchor": "middle" }, d.label));
+    hoverMark(g, out, d.note || `${d.label}: ${d.value} ${unit}`);
+    svg.append(g);
+  });
+  return [svg, out];
+}
+
+function masteryList(rows, onFocus) {
+  if (!rows.length) return h("p.dim.small", null, "Shows up once you've met a few items in each.");
+  return h("div.mastery", null, rows.map((r) => h("div.m-row", null,
+    h("div.m-name", null, r.name), h("div.m-bar", null, h("div.m-fill", { style: `width:${Math.round(r.m * 100)}%` })),
+    h("span.m-pct.small", null, Math.round(r.m * 100) + "%"),
+    h("button.focus-btn.small", { onclick: () => onFocus(r) }, "Practice"))));
+}
+
+// drill the items you've met in a pattern or topic, weakest first
+const drillGroup = (r) => startSession("weak", r.name, r.ids.filter((i) => state.items[i]).sort((a, b) => weight(a) - weight(b)).slice(0, 20));
+function renderProgress() {
+  const el = $("#view-progress"), goal = state.settings.goal;
+  const last7 = [...Array(7)].map((_, i) => dayKey(i - 6));
+  const wk = last7.map((k) => state.days[k] || {});
+  const cards7 = wk.reduce((a, d) => a + (d.cards || 0), 0), right7 = wk.reduce((a, d) => a + (d.right || 0), 0);
+  const mins7 = Math.round(wk.reduce((a, d) => a + (d.secs || 0), 0) / 60);
+  const total = Object.values(state.days).reduce((a, d) => a + (d.cards || 0), 0);
+  // weakest patterns / topics: average mastery over the items you've met (at least 3)
+  const avg = (ids) => { const met = ids.filter((i) => state.items[i]); return met.length >= 3 ? met.reduce((a, i) => a + weight(i), 0) / met.length : null; };
+  const weakPats = PATTERNS.map((p) => ({ ids: BY_PAT[p.id] || [], name: p.ko, m: avg(BY_PAT[p.id] || []) })).filter((r) => r.m != null).sort((a, b) => a.m - b.m).slice(0, 5);
+  const weakTopics = TOPICS.map((t) => ({ ids: BY_TOPIC[t.id] || [], name: t.icon + " " + t.en, m: avg(BY_TOPIC[t.id] || []) })).filter((r) => r.m != null).sort((a, b) => a.m - b.m).slice(0, 5);
+  const fc = forecast(7);
+  el.replaceChildren(
+    h("h1", null, "기록 ", h("span.dim", null, "progress")),
+    h("div.stats", null,
+      stat("🔥", streak(), "day streak"), stat("🏆", bestStreak(), "best streak"),
+      stat("⏱️", mins7, "min this week"), stat("🎯", cards7 ? Math.round((right7 / cards7) * 100) + "%" : "–", "right this week"),
+      stat("🃏", total, "cards ever")),
+    h("section.chart-card", null, h("h3", null, "Practice calendar"), ...heatmap()),
+    h("section.chart-card", null, h("h3", null, "Known over time"), ...knownChart()),
+    h("section.chart-card", null, h("h3", null, "Minutes, last 7 days"),
+      ...bars(last7.map((k, i) => { const d = wk[i], m = Math.round((d.secs || 0) / 60);
+        return { label: i === 6 ? "Today" : weekday(k), value: m, note: `${shortDate(k)}: ${m} min · ${d.cards || 0} cards${d.cards ? ` · ${Math.round(((d.right || 0) / d.cards) * 100)}% right` : ""}` }; }), "min", "Minutes practiced, last 7 days")),
+    h("section.chart-card", null, h("h3", null, "Reviews coming up"),
+      ...bars(fc.map((n, i) => ({ label: i === 0 ? "Today" : i === 1 ? "Tmrw" : weekday(dayKey(i)), value: n, note: `${i === 0 ? "Today (incl. overdue)" : shortDate(dayKey(i))}: ${n} reviews due` })), "reviews", "Reviews due over the next 7 days")),
+    h("section.chart-card", null, h("h3", null, "Weakest grammar"), masteryList(weakPats, drillGroup)),
+    h("section.chart-card", null, h("h3", null, "Weakest vocab topics"), masteryList(weakTopics, drillGroup)),
+    h("p.dim.small", null, `Goal: ${goal} cards a day (change it in ⚙ Settings).`));
+}
+
+// ───────────────────────── 복습 · Review ─────────────────────────
+const mistakeIds = () => Object.entries(state.items).filter(([id, r]) => ITEMS[id] && r.lastWrong && Date.now() - r.lastWrong < 7 * DAY)
+  .sort((a, b) => b[1].lastWrong - a[1].lastWrong).map(([id]) => id);
+function weakestIds(n = 20) {
+  return Object.entries(state.items).filter(([id, r]) => ITEMS[id] && (r.wrong || 0) + (r.lapses || 0) > 0)
+    .map(([id, r]) => [id, ((r.wrong || 0) + 2 * (r.lapses || 0)) / Math.max(3, r.reps)])
+    .sort((a, b) => b[1] - a[1]).slice(0, n).map(([id]) => id);
+}
+function forecast(days) {   // reviews due on each of the next `days` days (index 0 = today, including overdue)
+  const out = new Array(days).fill(0), start = new Date(); start.setHours(0, 0, 0, 0);
+  for (const id in state.items) {
+    if (!ITEMS[id]) continue;
+    const d = Math.max(0, Math.floor((state.items[id].due - start) / DAY));
+    if (d < days) out[d]++;
+  }
+  return out;
+}
+function renderReview() {
+  const el = $("#view-review"), due = dueNow(), mist = mistakeIds(), weak = weakestIds(), fc = forecast(7);
+  const name = (id) => (ITEMS[id].kind === "d" ? "💬 " + ITEMS[id].title : fill(ITEMS[id].ko));
+  const preview = (ids) => ids.length ? h("div.rv-preview", null, ids.slice(0, 4).map((id) => h("span.rv-pill", { lang: "ko" }, name(id))), ids.length > 4 ? h("span.dim.small", null, `+${ids.length - 4} more`) : null) : null;
+  const box = (icon, title, n, desc, ids, kind) => h("div.rv-card", null,
+    h("div.rv-head", null, h("span.rv-icon", null, icon), h("div", null, h("b", null, title), h("div.dim.small", null, desc)), h("span.rv-n" + (n ? "" : ".zero"), null, n)),
+    preview(ids),
+    h("button.btn" + (n ? ".primary" : "") + ".wide", { disabled: !n, onclick: () => startSession(kind, title, kind === "due" ? null : ids) }, n ? "Start ↑" : "Nothing here right now"));
+  el.replaceChildren(
+    h("h1", null, "복습 ", h("span.dim", null, "review")),
+    session ? h("div.rv-banner", null, `🔁 ${session.title} in progress: ${sessionLeft()} left`,
+      h("div.btn-row", null, h("button.btn.primary", { onclick: () => showView("feed") }, "Continue"), h("button.btn", { onclick: () => { endSession("Review stopped"); refreshAhead(); renderReview(); } }, "Stop"))) : null,
+    box("⏰", "Due now", due.length, "Only what's due, no new material, until you're caught up", due, "due"),
+    box("🩹", "Fix my mistakes", mist.length, "Everything you missed in the last 7 days. Misses come back until they stick.", mist, "mistakes"),
+    box("🎯", "Weakest 20", weak.length, "The words and phrases you miss most often", weak, "weak"),
+    h("h3", null, "What's coming"),
+    h("div.stats", null, stat("📅", fc[0], "today"), stat("🌅", fc[1], "tomorrow"), stat("🗓️", fc.reduce((a, b) => a + b, 0), "next 7 days")));
 }
 
 let installEvt = null;
@@ -960,15 +1610,38 @@ function renderSettings() {
       s === "downloadable" || s === "downloading" ? h("span", null, "On-device Korean can be downloaded. ", h("button.btn.small", { onclick: async () => { srStatus.textContent = "Downloading…"; srStatus.textContent = (await Speech.installOnDevice()) ? "✓ Installed" : "Couldn't install. Use the Android tip below."; } }, "Download")) :
       "Uses your phone's Google speech service. For offline use, install Korean offline speech (tip below).");
   });
+  // voice test: did Korean audio actually start?
+  const voiceOut = h("div.small.test-out");
+  const testVoice = h("button.btn.small", { onclick: async (e) => {
+    e.preventDefault();
+    voiceOut.className = "small test-out"; voiceOut.textContent = "Playing…";
+    const before = Speech.health().ok;
+    await Speech.say("안녕하세요. 소리가 잘 들려요?", st.rate);
+    const hl = Speech.health();
+    if (hl.ok > before) { voiceOut.className = "small test-out ok"; voiceOut.textContent = `✓ Korean voice works (${hl.voice}). Heard nothing? Turn up the media volume.`; }
+    else if (hl.last === "nokorean") { voiceOut.className = "small test-out bad"; voiceOut.replaceChildren(h("b", null, "✗ No Korean voice installed: it was read by a non-Korean voice (or not at all). "), VOICE_FIX); }
+    else { voiceOut.className = "small test-out bad"; voiceOut.replaceChildren(h("b", null, "✗ No Korean audio started. "), VOICE_FIX); }
+  } }, "▶ Test voice");
+  const micOut = h("div.feedback");
+  const testMic = Speech.canListen() ? micButton("안녕하세요. 만나서 반가워요.", (r) => {
+    if (r.error) { micOut.className = "feedback bad"; return (micOut.textContent = micErrorText(r.error)); }
+    const v = verdict(r, "안녕하세요. 만나서 반가워요.", { ok: "✓ Speech check works!" });
+    micOut.className = "feedback " + v.lvl; micOut.replaceChildren(...v.el);
+  }, "🎤 Test: say “안녕하세요. 만나서 반가워요.”") : null;
   el.replaceChildren(h("h1", null, "설정 ", h("span.dim", null, "settings")),
+    row("Your level", h("select", { onchange: (e) => { st.level = +e.target.value; save(); hud(); refreshAhead(); toast(`${LEVELS[st.level]}: new cards now follow that mix`); } },
+      [1, 2, 3].map((l) => h("option", { value: l, selected: (st.level || 2) === l }, LEVELS[l]))),
+      "Intermediate: mostly new vocabulary and level-4 grammar; easier phrases come as quick checks"),
     row("Your name in Hangul", h("input", { value: st.name, placeholder: "에런", oninput: (e) => { st.name = e.target.value; save(); } }), "Used in dialogues: 저는 ___이에요"),
     row("Daily goal (cards)", num("goal", [10, 20, 30, 50, 100])),
-    row("New phrases per day", num("newPerDay", [5, 10, 15, 20, 30, 50]), "Reviews are unlimited; this caps brand-new material"),
+    row("New words & phrases per day", num("newPerDay", [5, 10, 15, 20, 25, 30, 40, 50]), "Reviews are unlimited; this caps brand-new material"),
     h("h3", null, "Sound & speaking"),
+    h("div.test-box", null, h("div.test-row", null, testVoice, h("span.dim.small", null, "Plays a Korean sentence")), voiceOut,
+      testMic, micOut),
     row("Korean voice", voices.length
       ? h("select", { onchange: (e) => { st.voice = e.target.value; Speech.setVoice(st.voice); save(); Speech.say("안녕하세요. 만나서 반가워요.", st.rate); } },
         h("option", { value: "" }, "Default"), voices.map((v) => h("option", { value: v.name, selected: st.voice === v.name }, v.name + (v.localService ? " (offline)" : ""))))
-      : h("span.warn", null, "No Korean voice found"), voices.length ? null : "Android: Settings → Accessibility → Text-to-speech → Google → install Korean"),
+      : h("span.warn", null, "No Korean voice listed"), voices.length ? null : VOICE_FIX),
     row("Speaking speed", h("input", { type: "range", min: 0.5, max: 1.3, step: 0.05, value: st.rate, onchange: (e) => { st.rate = +e.target.value; save(); Speech.say("천천히 말해 주세요.", st.rate); } })),
     row("Auto-play audio", tog("autoplay")),
     row("Auto-advance when right", tog("autoAdvance")),
@@ -987,8 +1660,17 @@ function renderSettings() {
       h("button.btn", { onclick: exportData }, "⬇ Back up progress"),
       h("button.btn", { onclick: importData }, "⬆ Restore backup")),
     h("button.btn.danger.wide", { onclick: () => { if (confirm("Erase ALL progress? This can't be undone.")) replaceState(blank()); } }, "Reset all progress"),
-    h("p.dim.small", null, `Dongne · ${SENTENCES.length} phrases · ${DIALOGUES.length} dialogues · ${PATTERNS.length} patterns · all on this phone, no account.`));
+    h("p.dim.small", null, `Dongne · ${SENTENCES.length} phrases · ${WORDS.length} words · ${DIALOGUES.length} dialogues · ${PATTERNS.length} patterns · all on this phone, no account.`));
 }
+const VOICE_FIX = "On Android: Settings → Accessibility → Text-to-speech output → Preferred engine: Speech Services by Google → ⚙ → Install voice data → Korean (한국어). Then fully close and reopen Chrome. On a computer, Microsoft Edge has Korean voices built in.";
+// warn once per session if Korean audio fails, and stop serving listening cards
+let voiceWarned = false;
+Speech.onHealth((status) => {
+  if (status === "ok" || voiceWarned) return;
+  voiceWarned = true;
+  toast(status === "nokorean" ? "🔇 No Korean voice on this device. Settings → Test voice shows how to add it." : "🔇 No Korean audio came out. Settings → Test voice shows the fix.", 7000);
+  if (Speech.health().broken && started) refreshAhead();
+});
 // swap in a whole new state; it must go through `state` because pagehide saves `state`
 function replaceState(data) {
   state = data;
@@ -1015,15 +1697,21 @@ let started = false;
 function splash() {
   const t = today(), first = !state.onboarded;
   const nameIn = h("input.name-in", { placeholder: "에런", value: state.settings.name, lang: "ko" });
+  let lvl = state.settings.level || 2;
+  const lvlDesc = { 1: "New to Korean: start from greetings", 2: "Know the basics: skim them, start with real conversations", 3: "Past the basics: push me with new words and grammar" };
+  const lvlBox = h("div.level-pick", null, [1, 2, 3].map((l) => h("button.level-btn" + (l === lvl ? ".on" : ""), { onclick: (e) => {
+    lvl = l; lvlBox.querySelectorAll(".level-btn").forEach((b) => b.classList.toggle("on", b === e.currentTarget));
+  } }, h("b", null, LEVELS[l]), h("span.dim.small", null, lvlDesc[l]))));
   const el = h("div.splash", null, h("div.splash-in", null,
     h("div.logo", { lang: "ko" }, "동네"),
     h("div.tagline", null, first ? "Your Korean neighborhood. Swipe instead of scroll." : `${t.cards}/${state.settings.goal} today · 🔥 ${streak()}`),
     first ? h("div.onboard", null,
       h("p", null, "Every swipe is a tiny rep: hear it, say it, build it, chat with locals. A smart scheduler brings each phrase back right before you'd forget it."),
+      h("div.onboard-label", null, "Your Korean level"), lvlBox,
       h("label", null, "Your name in Hangul (for dialogues)", nameIn),
       h("p.dim.small", null, "🎤 tap = speaking on · 🤫 = quiet mode for public places")) : null,
     h("button.btn.primary.start", { onclick: () => {
-      if (first) { state.settings.name = nameIn.value.trim(); state.onboarded = true; save(); }
+      if (first) { state.settings.name = nameIn.value.trim(); state.settings.level = lvl; state.onboarded = true; save(); }
       el.remove(); begin();
     } }, first ? "시작하기 · Start" : "계속하기 · Continue"),
     h("p.warn.small.voice-warn", { hidden: true }, "No Korean voice found on this device. If audio stays silent, see Settings.")));

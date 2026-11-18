@@ -7,6 +7,7 @@ const Speech = (() => {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let voices = [];
   let voiceName = "";
+  const badVoices = new Set();     // voices that errored on this device; skipped from then on
 
   function loadVoices() {
     if (!synth) return;
@@ -15,75 +16,143 @@ const Speech = (() => {
   if (synth) { loadVoices(); synth.addEventListener?.("voiceschanged", loadVoices); }
 
   function voice() {
-    return voices.find((v) => v.name === voiceName) || voices.find((v) => v.localService) || voices[0] || null;
+    const ok = voices.filter((v) => !badVoices.has(v.name));
+    return ok.find((v) => v.name === voiceName) || ok.find((v) => v.localService) || ok[0] || null;
   }
 
-  // Resolves when speaking ends (or right away if there's no voice). Android sometimes never
-  // fires onend, so a length-based timeout settles it too.
+  // ── voice health: did audio actually start? The app warns once if it never does. ──
+  const health = { ok: 0, fail: 0, last: "untested", voice: "" };
+  const listeners = [];
+  function report(status, detail = "") {
+    health.last = status;
+    if (status === "ok") { health.ok++; health.voice = detail; } else health.fail++;
+    listeners.forEach((f) => f(status, detail));
+  }
+
+  // Resolves when speaking ends. Android Chrome drops an utterance queued right after
+  // cancel(), so we only cancel when something is playing and then wait a beat before
+  // speaking. Utterances are kept referenced because Chrome can garbage-collect them
+  // mid-speech and never fire onend; a length-based timeout settles it either way.
+  const keep = new Set();
+  let token = 0;
   function say(text, rate = 0.9) {
     return new Promise((done) => {
-      if (!synth) return done(false);
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(text.replace(/[~…]/g, " "));
-      u.lang = "ko-KR";
-      const v = voice();
-      if (v) u.voice = v;
-      u.rate = rate;
-      let settled = false;
-      const end = (ok) => { if (!settled) { settled = true; clearTimeout(t); done(ok); } };
-      const t = setTimeout(() => end(true), 1500 + text.length * 260 / rate);
-      u.onend = () => end(true);
-      u.onerror = () => end(false);
-      synth.speak(u);
+      if (!synth || !text) { if (!synth) report("none"); return done(false); }
+      const my = ++token;
+      const busy = synth.speaking || synth.pending;
+      if (busy) synth.cancel();
+      try { synth.resume(); } catch (e) {}    // desktop Chrome can get stuck "paused"
+      if (!busy) return speakNow(text, rate, done, my, true);      // same tick as the tap
+      setTimeout(() => (my === token ? speakNow(text, rate, done, my, true) : done(false)), 180);
     });
   }
-  function stop() { synth?.cancel(); }
+  function speakNow(text, rate, done, my, mayRetry) {
+    loadVoices();     // the list can arrive late without a voiceschanged event
+    const u = new SpeechSynthesisUtterance(text.replace(/[~…]/g, " "));
+    u.lang = "ko-KR";
+    const v = voice();
+    if (v) u.voice = v;
+    u.rate = rate;
+    keep.add(u);
+    let started = false, settled = false;
+    const end = (ok) => { if (settled) return; settled = true; clearTimeout(t1); clearTimeout(t2); keep.delete(u); done(ok); };
+    // voices listed but none Korean: the phone reads Hangul with a non-Korean voice (or silence)
+    const noKorean = !v && synth.getVoices().length > 0;
+    u.onstart = () => { started = true; report(noKorean ? "nokorean" : "ok", v ? v.name : "default voice"); };
+    u.onend = () => end(true);
+    u.onerror = (e) => {
+      const err = e.error || "error";
+      if (err === "interrupted" || err === "canceled") return end(false);
+      if (err === "not-allowed") return end(false);          // no tap yet this session; the next tap works
+      if (mayRetry && v && my === token) {                   // that voice is broken here: try another / the default
+        badVoices.add(v.name); settled = true; clearTimeout(t1); clearTimeout(t2); keep.delete(u);
+        return speakNow(text, rate, done, my, false);
+      }
+      report("error", err); end(false);
+    };
+    // never started within 3 s (and nothing newer replaced it): treat as silent
+    const t1 = setTimeout(() => { if (!started && !settled && my === token && !synth.speaking) report("silent"); }, 3000);
+    const t2 = setTimeout(() => end(true), 3000 + text.length * 260 / rate);
+    synth.speak(u);
+  }
+  function stop() { token++; if (synth && (synth.speaking || synth.pending)) synth.cancel(); }
+  // Korean audio confirmed broken here (failed and never once worked): hide listening cards
+  const broken = () => health.ok === 0 && (health.fail >= 2 || health.last === "nokorean");
 
   // ── recognition ──
-  let localOk = null;     // null = untried; true/false once we know if on-device works
+  // On-device recognition is only requested when Chrome says the Korean model is installed;
+  // asking for it blindly made some phones fail silently.
+  let localState = "unknown";
+  if (SR && typeof SR.available === "function") {
+    try { SR.available({ langs: ["ko-KR"], processLocally: true }).then((s) => (localState = s)).catch(() => {}); } catch (e) {}
+  }
   function canListen() { return !!SR; }
 
-  function listen({ onInterim } = {}) {
+  // listen({ onState, onInterim, stopWhen, maxMs }) → { alts: [...], error }
+  //   onState("listening" | "hearing"), onInterim(text, isFinal), stopWhen(alts) → true ends early.
+  // It always settles: Android can keep the mic open long after you stop talking, so we
+  // stop after a pause, cap the length, and abort if stop() never produces an end event.
+  function listen(opts = {}) {
+    const { onState, onInterim, stopWhen, maxMs = 9000 } = opts;
     return new Promise((resolve) => {
       if (!SR) return resolve({ error: "unsupported", alts: [] });
-      const rec = new SR();
+      let rec;
+      try { rec = new SR(); } catch (e) { return resolve({ error: "unsupported", alts: [] }); }
       rec.lang = "ko-KR";
       rec.interimResults = true;
       rec.maxAlternatives = 5;
       rec.continuous = false;
-      if ("processLocally" in rec && localOk !== false) rec.processLocally = true;
-      let alts = [];
-      let err = null;
+      const local = "processLocally" in rec && localState === "available";
+      if (local) rec.processLocally = true;
+      let alts = [], err = null, finished = false, lastHeard = 0, stopping = false;
+      const timers = [];
+      const cleanup = () => { finished = true; timers.forEach(clearTimeout); clearInterval(iv); if (Speech.current?.rec === rec) Speech.current = null; };
+      const finish = () => { if (finished) return; cleanup(); resolve({ error: alts.length ? null : (err || "no-speech"), alts }); };
+      const stop = () => {
+        if (finished || stopping) return;
+        stopping = true;
+        try { rec.stop(); } catch (e) {}
+        timers.push(setTimeout(() => { try { rec.abort(); } catch (e) {} finish(); }, 1500));
+      };
+      rec.onstart = () => onState?.("listening");
+      rec.onsoundstart = rec.onspeechstart = () => onState?.("hearing");
       rec.onresult = (e) => {
-        const r = e.results[e.results.length - 1];
-        alts = Array.from(r, (a) => a.transcript.trim()).filter(Boolean);
-        if (!r.isFinal) onInterim?.(alts[0] || "");
+        // Android sometimes splits one utterance into several results: join them
+        const res = Array.from(e.results);
+        const head = res.slice(0, -1).map((r) => r[0].transcript).join(" ");
+        const last = res[res.length - 1];
+        alts = Array.from(last, (a) => (head + " " + a.transcript).trim()).filter(Boolean);
+        lastHeard = Date.now();
+        onState?.("hearing");
+        onInterim?.(alts[0] || "", last.isFinal);
+        if (stopWhen?.(alts)) stop();
       };
       rec.onerror = (e) => { err = e.error; };
       rec.onend = () => {
-        // on-device asked for but not installed: remember, retry through the normal path once
-        if (rec.processLocally && (err === "language-not-supported" || err === "service-not-allowed")) {
-          localOk = false;
-          return resolve(listen({ onInterim }));
+        if (finished) return;
+        if (local && !alts.length && (err === "language-not-supported" || err === "service-not-allowed" || err === "network")) {
+          localState = "unavailable"; cleanup();
+          return resolve(listen(opts));                    // on-device failed: retry with the normal service
         }
-        if (rec.processLocally && !err) localOk = true;
-        resolve({ error: alts.length ? null : (err || "no-speech"), alts });
+        finish();
       };
-      Speech.current = rec;
-      try { rec.start(); } catch (e) { resolve({ error: "busy", alts: [] }); }
+      const iv = setInterval(() => { if (lastHeard && Date.now() - lastHeard > 1700) stop(); }, 250);
+      timers.push(setTimeout(stop, maxMs));
+      Speech.current = { rec, stop };
+      try { rec.start(); } catch (e) { cleanup(); resolve({ error: "busy", alts: [] }); }
     });
   }
-  function stopListening() { try { Speech.current?.stop(); } catch (e) {} }
+  function stopListening() { Speech.current?.stop(); }
 
   // Chrome 139+ can install an on-device Korean model. Older builds only have the Google
   // app's offline pack (Android settings), which Chrome uses on its own when offline.
   async function onDeviceStatus() {
     if (!SR || typeof SR.available !== "function") return "unknown";
-    try { return await SR.available({ langs: ["ko-KR"], processLocally: true }); } catch (e) { return "unknown"; }
+    try { return (localState = await SR.available({ langs: ["ko-KR"], processLocally: true })); } catch (e) { return "unknown"; }
   }
   async function installOnDevice() {
     if (!SR || typeof SR.install !== "function") return false;
-    try { return await SR.install({ langs: ["ko-KR"], processLocally: true }); } catch (e) { return false; }
+    try { const ok = await SR.install({ langs: ["ko-KR"], processLocally: true }); if (ok) localState = "available"; return ok; } catch (e) { return false; }
   }
 
   // ── recorder (always local) ──
@@ -150,8 +219,9 @@ const Speech = (() => {
   return {
     say, stop, voice, voices: () => voices, setVoice: (n) => (voiceName = n),
     // some Android builds list no voices at all yet still speak ko-KR, so only a list
-    // without Korean in it counts as "no voice"
-    hasVoice: () => !!synth && (voices.length > 0 || synth.getVoices().length === 0),
+    // without Korean in it counts as "no voice", unless playback has actually failed
+    hasVoice: () => !!synth && !broken() && (voices.length > 0 || synth.getVoices().length === 0),
+    health: () => ({ ...health, broken: broken() }), onHealth: (f) => listeners.push(f),
     canListen, listen, stopListening, onDeviceStatus, installOnDevice,
     record, play, similarity, best, current: null, stopRecording: () => {},
   };

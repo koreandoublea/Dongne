@@ -185,6 +185,83 @@ const PATTERNS = [
   { id: "ji", ko: "-(으)ㄴ 지 + time + 됐어요", en: "it's been (time) since", lvl: 3,
     how: "verb + (으)ㄴ 지: 만난 지 2년 됐어요 · 온 지 한 달 됐어요",
     note: "Couples always get asked: 사귄 지 얼마나 됐어요? (how long have you been dating?)" },
+
+  // level 4: intermediate, the grammar that makes you sound like a real speaker
+  { id: "geodeun", ko: "-거든요", en: "because, you see (giving the reason)", lvl: 4,
+    how: "stem + 거든요: 바쁘거든요 · past: 갔거든요 · N: 학생이거든요",
+    note: "Explains the reason AFTER you've said something, as if filling the listener in: 오늘 못 가요. 일이 있거든요." },
+  { id: "janha", ko: "-잖아요", en: "you know (shared knowledge)", lvl: 4,
+    how: "stem + 잖아요: 비싸잖아요 · past: 했잖아요 · N: 주말이잖아요",
+    note: "For something the listener already knows or should know. Friendly with peers; can sound pushy to elders." },
+  { id: "deora", ko: "-더라고요", en: "I found / I noticed (from experience)", lvl: 4,
+    how: "stem + 더라고요: 맛있더라고요 · 사람이 많더라고요",
+    note: "Reports something you saw or felt yourself, like telling a little story: 가 보니까 진짜 좋더라고요." },
+  { id: "giro", ko: "-기로 했어요", en: "decided / agreed to", lvl: 4,
+    how: "verb stem + 기로 했어요: 가기로 했어요 · 만나기로 했어요",
+    note: "A decision or a plan agreed with someone: 친구랑 7시에 만나기로 했어요." },
+  { id: "ge", ko: "-게 되다", en: "end up / come to (do)", lvl: 4,
+    how: "verb stem + 게 됐어요: 알게 됐어요 · 가게 됐어요",
+    note: "Something that happened through circumstances, not just your choice. Very common when telling your story: 한국어를 배우게 됐어요." },
+  { id: "baram", ko: "-는 바람에", en: "because (something unexpected happened)", lvl: 4,
+    how: "verb stem + 는 바람에: 늦잠 자는 바람에 · 비가 오는 바람에",
+    note: "An unexpected cause with a bad result, always followed by a past tense. The go-to excuse pattern." },
+  { id: "lkkabwa", ko: "-(으)ㄹ까 봐", en: "worried that / in case", lvl: 4,
+    how: "vowel + ㄹ까 봐 (늦을까 봐) · consonant + 을까 봐 (잊을까 봐)",
+    note: "늦을까 봐 택시 탔어요 = I took a taxi because I was worried I'd be late. Often with 걱정돼요." },
+  { id: "daga", ko: "-다가", en: "was doing … and then", lvl: 4,
+    how: "verb stem + 다가: 가다가 · 자다가 · past -았/었다가 (went and came back)",
+    note: "One action gets interrupted or switches: 집에 가다가 친구를 만났어요. 샀다가 환불했어요 = bought it, then returned it." },
+  { id: "jamaja", ko: "-자마자", en: "as soon as", lvl: 4,
+    how: "verb stem + 자마자: 도착하자마자 · 일어나자마자",
+    note: "The second thing happens right after the first: 집에 오자마자 잤어요." },
+  { id: "dago", ko: "-대요 / -다고 했어요", en: "they say / I heard (reported speech)", lvl: 4,
+    how: "verb + ㄴ/는대요 (간대요, 먹는대요) · adj + 대요 (춥대요) · N + (이)래요 · questions: -냐고 했어요",
+    note: "Passing on what someone said. 내일 비 온대요 = they say it'll rain tomorrow. The full form is -다고 해요." },
+  { id: "teonde", ko: "-(으)ㄹ 텐데", en: "it'll probably… (so / but)", lvl: 4,
+    how: "vowel + ㄹ 텐데 (힘들 텐데) · consonant + 을 텐데 (많을 텐데)",
+    note: "A guess that sets up advice or concern: 피곤할 텐데 좀 쉬세요. Also wishful: 시간이 있으면 좋을 텐데." },
+  { id: "beorida", ko: "-아/어 버리다", en: "ended up / completely (often with regret)", lvl: 4,
+    how: "verb -아/어 + 버렸어요: 잊어버렸어요 · 다 먹어 버렸어요",
+    note: "The action is done and gone: relief or regret. 잃어버리다 (to lose) and 잊어버리다 (to forget) come from this." },
+  { id: "nota", ko: "-아/어 놓다 · 두다", en: "do in advance / leave it done", lvl: 4,
+    how: "verb -아/어 + 놓다/두다: 예약해 놨어요 · 사 둘게요",
+    note: "Getting something ready and leaving it that way. 놨어요 is the spoken short form of 놓았어요." },
+  { id: "ppeon", ko: "-(으)ㄹ 뻔했어요", en: "almost (did something bad)", lvl: 4,
+    how: "vowel + ㄹ 뻔했어요 (넘어질 뻔했어요) · consonant + 을 뻔했어요 (놓칠 뻔했어요)",
+    note: "Something nearly happened but didn't. Great for stories: 비행기 놓칠 뻔했어요!" },
+  { id: "nabwa", ko: "-나 봐요 / -(으)ㄴ가 봐요", en: "seems like (guessing from what you see)", lvl: 4,
+    how: "verb + 나 봐요 (자나 봐요) · adj + (으)ㄴ가 봐요 (바쁜가 봐요) · past: 했나 봐요",
+    note: "A guess from evidence in front of you: 불이 꺼졌네요. 다 퇴근했나 봐요." },
+  { id: "gime", ko: "-는 김에", en: "while you're at it", lvl: 4,
+    how: "verb + 는 김에 (나가는 김에) · past + (으)ㄴ 김에 (온 김에)",
+    note: "Using one occasion to do another thing too: 마트 가는 김에 우유 좀 사 올게요." },
+  { id: "surok", ko: "-(으)ㄹ수록", en: "the more… the more", lvl: 4,
+    how: "vowel + ㄹ수록 (볼수록) · consonant + 을수록 (먹을수록) · often -(으)면 -(으)ㄹ수록",
+    note: "볼수록 좋아요 = the more I see it, the more I like it. 빠를수록 좋아요 = the sooner the better." },
+  { id: "manhae", ko: "-(으)ㄹ 만해요", en: "worth doing / okay to", lvl: 4,
+    how: "vowel + ㄹ 만해요 (볼 만해요) · consonant + 을 만해요 (먹을 만해요)",
+    note: "Worth it, or bearable: 그 영화 볼 만해요 (worth watching) · 매운데 먹을 만해요 (spicy but manageable)." },
+  { id: "eojida", ko: "-아/어지다", en: "become / get (change)", lvl: 4,
+    how: "adj -아/어 + 지다: 추워졌어요 · 좋아졌어요 · 많아졌어요",
+    note: "A change of state over time: 한국어 실력이 많이 좋아졌어요." },
+  { id: "ado", ko: "-아/어도", en: "even if / even though", lvl: 4,
+    how: "verb/adj -아/어 + 도: 비싸도 · 바빠도 · 먹어도",
+    note: "아무리 -아/어도 = no matter how much: 아무리 먹어도 배가 고파요." },
+  { id: "lji", ko: "-(으)ㄹ지 / -는지", en: "whether / if (not sure)", lvl: 4,
+    how: "future: 갈지 모르겠어요 · present: 어디 있는지 알아요? · past: 했는지",
+    note: "Indirect questions: 몇 시에 끝나는지 알아요? (do you know what time it ends?)" },
+  { id: "cheok", ko: "-는 척하다", en: "pretend to", lvl: 4,
+    how: "verb + 는 척 (자는 척) · adj + (으)ㄴ 척 (괜찮은 척) · past: 본 척",
+    note: "못 들은 척했어요 = I pretended I didn't hear. 아는 척하다 = to act like you know." },
+  { id: "ttaemun", ko: "-기 때문에", en: "because (stating a firm reason)", lvl: 4,
+    how: "stem + 기 때문에: 바쁘기 때문에 · N 때문에: 일 때문에",
+    note: "Firmer and a bit more formal than -아서. N 때문에 (because of N) is everywhere: 비 때문에, 너 때문에." },
+  { id: "myeonseo", ko: "-(으)면서", en: "while (at the same time)", lvl: 4,
+    how: "vowel + 면서 (보면서) · consonant + 으면서 (먹으면서)",
+    note: "Two things at once by the same person: 음악 들으면서 공부해요." },
+  { id: "ayagetda", ko: "-아/어야겠어요", en: "I'd better / I should (deciding now)", lvl: 4,
+    how: "verb -아/어 + 야겠어요: 가야겠어요 · 사야겠어요",
+    note: "A decision you just made: 벌써 열 시네요. 이제 가야겠어요." },
 ];
 
 const SCENES = [
@@ -242,7 +319,23 @@ const SCENES = [
   { id: "daily", ko: "일상 대화", en: "Everyday talk", icon: "☀️", place: "Your street",
     char: { name: "옆집 할머니", role: "your next-door grandma", emoji: "👵", elder: true },
     can: "Talk about weather, feelings, and your day" },
+
+  // intermediate scenes (lvl 3): built on the level-4 grammar
+  { id: "story", ko: "있었던 일", en: "Telling stories", icon: "📖", place: "Chicken & beer place", lvl: 3,
+    char: { name: "민호", role: "a friend who loves a good story", emoji: "🍗" },
+    can: "Tell what happened to you, with excuses, surprises, and near-misses" },
+  { id: "work", ko: "회사 생활", en: "At work", icon: "🏢", place: "Your office in Seoul", lvl: 3,
+    char: { name: "서연 선배", role: "your senior coworker", emoji: "👩‍💼", elder: true },
+    can: "Talk with coworkers about schedules, meetings, overtime, and 회식" },
+  { id: "living", ko: "한국 생활", en: "Living in Korea", icon: "🔑", place: "Your one-room apartment", lvl: 3,
+    char: { name: "집주인 아저씨", role: "your landlord", emoji: "🧓", elder: true },
+    can: "Handle the landlord, repairs, deliveries, recycling, and neighbors" },
+  { id: "opinion", ko: "생각 나누기", en: "Opinions & advice", icon: "🗣️", place: "A late-night café", lvl: 3,
+    char: { name: "하은", role: "a friend who loves deep talks", emoji: "💭" },
+    can: "Share opinions, give advice, and talk about plans and worries" },
 ];
+// earlier scenes: lvl 1 = survival basics, lvl 2 = everything else (for the level setting)
+for (const s of SCENES) s.lvl = s.lvl || (["basics", "meet", "cafe", "store", "restaurant", "transit", "shopping"].includes(s.id) ? 1 : 2);
 
 const SENTENCES = [];
 const DIALOGUES = [];
@@ -1201,6 +1294,207 @@ D("inlaws-leave", "inlaws", "Saying goodbye", [
     ["조심히 가세요.", "Get home safe.", "You're the one leaving."]),
 ]);
 
+// ═════════════════════════ intermediate scenes ═════════════════════════
+// English lines cue the level-4 endings on purpose: "…, you see" = -거든요,
+// "…, you know" = -잖아요, "it turned out / I found" = -더라고요.
+
+// ───────────────────────── 있었던 일 · Telling stories ─────────────────────────
+S("story", "제 말 좀 들어 보세요.", "Listen to this. (lit. try listening to my words)", "bwa seyo", "말=what someone says|듣다=to listen");
+S("story", "오늘 아침에 늦잠 자는 바람에 지각했어요.", "I overslept this morning, so I was late.", "baram past", "늦잠(을) 자다=to oversleep|지각하다=to be late (work, school)");
+S("story", "버스를 놓치는 바람에 택시를 탔어요.", "I missed the bus, so I had to take a taxi.", "baram past", "놓치다=to miss (a bus, a chance)");
+S("story", "비행기를 놓칠 뻔했어요!", "I almost missed my flight!", "ppeon", "비행기=plane");
+S("story", "계단에서 넘어질 뻔했어요.", "I almost fell on the stairs.", "ppeon", "계단=stairs|넘어지다=to fall over");
+S("story", "집에 가다가 옛날 친구를 만났어요.", "On my way home I ran into an old friend.", "daga past", "옛날=the old days|만나다=to meet, run into");
+S("story", "영화를 보다가 잠들어 버렸어요.", "I was watching a movie and fell asleep.", "daga beorida", "잠들다=to fall asleep");
+S("story", "집에 오자마자 씻고 잤어요.", "As soon as I got home, I washed up and slept.", "jamaja go past", "씻다=to wash up");
+S("story", "그 식당 가 봤는데 진짜 맛있더라고요.", "I tried that restaurant; it turned out really good.", "deora neunde bwa", "가 보다=to go (and try)");
+S("story", "주말에 홍대에 갔는데 사람이 정말 많더라고요.", "I went to Hongdae on the weekend, and I found it packed.", "deora neunde", "사람이 많다=crowded (lit. many people)");
+D("story-late", "story", "Late again", [
+  N("왜 이렇게 늦었어요? 무슨 일 있었어요?", "Why are you so late? Did something happen?", "왜 이렇게 늦었어? 무슨 일 있었어?"),
+  M(["말도 마세요. 지하철이 고장 나는 바람에 30분이나 갇혀 있었어요.", "Don't even ask. The subway broke down and I was stuck for 30 minutes."],
+    ["지하철이 고장 나는 바람에 빨리 왔어요.", "The subway broke down, so I came quickly.", "-는 바람에 leads to a bad result, and you didn't come quickly."],
+    ["말도 마세요. 제가 지하철을 고장 냈어요.", "Don't even ask. I broke the subway.", "고장 내다 = to break something yourself. You'd be on the news!"]),
+  N("헐, 진짜요? 그래서 어떻게 했어요?", "Whoa, really? So what did you do?", "헐, 진짜? 그래서 어떻게 했어?"),
+  M(["역에 도착하자마자 택시 탔어요. 더 늦을까 봐요.", "As soon as I reached a station I took a taxi, in case I'd be even later."],
+    ["택시 타자마자 역에 도착했어요.", "As soon as I took a taxi, I arrived at the station.", "The order is backwards: the taxi came after the station."],
+    ["더 늦을 뻔했어요. 택시 안 탔어요.", "I almost got even later. I didn't take a taxi.", "뻔했어요 = it almost happened. It doesn't say what you did."]),
+  N("고생했네요. 일단 앉아요. 뭐 마실래요?", "Sounds rough. Sit down first. What do you want to drink?", "고생했네. 일단 앉아. 뭐 마실래?"),
+  M(["저는 맥주요! 오늘은 진짜 마셔야겠어요.", "Beer for me! I really need a drink today."],
+    ["저는 맥주 마셔야 돼요?", "Do I have to drink beer?", "Sounds like you're being forced, and he asked what you WANT."],
+    ["괜찮아요. 고생했어요.", "It's fine. You've been through a lot.", "고생했어요 is what HE says to YOU here."]),
+]);
+S("story", "지갑을 잃어버려서 정말 당황했어요.", "I lost my wallet, so I really panicked.", "beorida aseo", "잃어버리다=to lose|당황하다=to be flustered");
+S("story", "갑자기 비가 와서 다 젖어 버렸어요.", "It suddenly rained and I got completely soaked.", "aseo beorida", "갑자기=suddenly|젖다=to get wet");
+S("story", "길을 잃을까 봐 지도를 계속 봤어요.", "I kept checking the map in case I got lost.", "lkkabwa past", "길을 잃다=to get lost|계속=continuously");
+S("story", "샀다가 마음에 안 들어서 환불했어요.", "I bought it, didn't like it, and returned it.", "daga aseo past", "마음에 들다=to like (lit. enter the heart)|환불하다=to get a refund");
+S("story", "아무리 찾아도 없더라고요.", "No matter how hard I looked, I found it just wasn't there.", "ado deora", "아무리=no matter how|찾다=to look for");
+S("story", "처음엔 몰랐는데 나중에 알게 됐어요.", "I didn't know at first, but I found out later.", "ge neunde", "처음=the beginning|나중에=later|알게 되다=to come to know");
+S("story", "지수 씨가 다음 달에 결혼한대요.", "I heard Jisu is getting married next month.", "dago", "다음 달=next month|결혼하다=to get married");
+S("story", "내일 비가 많이 온대요.", "They say it'll rain a lot tomorrow.", "dago", "비가 오다=to rain");
+S("story", "그 가게 이번 달까지만 한대요.", "I heard that shop is only open until the end of this month.", "dago", "이번 달=this month|까지만=only until");
+S("story", "모르는 사람이 말을 걸어서 못 들은 척했어요.", "A stranger started talking to me, so I pretended not to hear.", "cheok aseo", "말을 걸다=to start talking to someone");
+S("story", "진짜 깜짝 놀랐어요.", "I was totally startled.", "past", "깜짝 놀라다=to be startled");
+S("story", "완전 웃겼어요.", "It was so funny.", "past", "완전=totally (casual)|웃기다=to be funny");
+S("story", "그래서요? 그다음엔요?", "And? Then what?", "", "그래서=so|그다음=after that|keeps a storyteller going");
+S("story", "아, 그래서 그랬군요.", "Ah, so that's why.", "", "-군요=realizing something");
+S("story", "한국에 도착하자마자 떡볶이를 먹었어요.", "As soon as I landed in Korea, I ate tteokbokki.", "jamaja past", "도착하다=to arrive");
+S("story", "어제 못 잤어요. 옆집이 너무 시끄러웠거든요.", "I couldn't sleep last night. Next door was so loud, you see.", "geodeun mot past", "옆집=next door|시끄럽다=to be noisy");
+S("story", "친구랑 다음 주에 제주도 가기로 했어요.", "My friend and I decided to go to Jeju next week.", "giro", "제주도=Jeju Island");
+S("story", "다음부터는 알람을 두 개 맞춰야겠어요.", "From now on I'd better set two alarms.", "ayagetda", "알람을 맞추다=to set an alarm");
+D("story-trip", "story", "How was Busan?", [
+  N("부산 여행 어땠어요?", "How was your Busan trip?", "부산 여행 어땠어?"),
+  M(["너무 좋았어요. 바다가 생각보다 훨씬 예쁘더라고요.", "It was great. The sea turned out way prettier than I expected."],
+    ["너무 좋았어요. 바다가 예쁘거든요.", "It was great. The sea is pretty, you see.", "-거든요 explains a reason; here you're reporting what you SAW, so -더라고요."],
+    ["바다가 예쁠 텐데요.", "The sea would probably be pretty.", "-(으)ㄹ 텐데 is a guess. You were actually there!"]),
+  N("부럽다! 뭐 먹었어요?", "Jealous! What did you eat?", "부럽다! 뭐 먹었어?"),
+  M(["돼지국밥 먹어 봤는데 진짜 먹을 만하더라고요.", "I tried dwaeji-gukbap, and it was really worth it."],
+    ["돼지국밥 먹을 뻔했어요.", "I almost ate dwaeji-gukbap.", "뻔했어요 is for near-misses, usually bad ones."],
+    ["돼지국밥 먹어 버렸어요.", "I went and ate dwaeji-gukbap (sigh).", "-아/어 버리다 adds regret or finality; odd for food you enjoyed."]),
+  N("다음에 또 가면 저도 데려가요.", "Next time you go, take me too.", "다음에 또 가면 나도 데려가."),
+  M(["좋아요! 다음엔 같이 가기로 해요.", "Deal! Let's plan to go together next time."],
+    ["좋아요! 다음엔 같이 가기 때문에요.", "Good! Because next time together.", "-기 때문에 needs a full clause after it; it doesn't work as a reply."],
+    ["다음엔 혼자 가야겠어요.", "Next time I'd better go alone.", "Ouch. That turns your friend down."]),
+]);
+
+// ───────────────────────── 회사 생활 · At work ─────────────────────────
+S("work", "오늘 회의가 몇 시에 시작하는지 아세요?", "Do you know what time today's meeting starts?", "lji si", "회의=meeting|시작하다=to start");
+S("work", "보고서는 내일까지 끝내기로 했어요.", "We agreed to finish the report by tomorrow.", "giro", "보고서=report|끝내다=to finish (something)");
+S("work", "다음 주에 부산으로 출장 가게 됐어요.", "It turns out I'm going on a business trip to Busan next week.", "ge", "출장=business trip");
+S("work", "오늘도 야근해야 될 것 같아요.", "I think I'll have to work late again today.", "aya gat", "야근하다=to work late|도=again, too");
+S("work", "회의 자료는 미리 준비해 놨어요.", "I got the meeting materials ready in advance.", "nota", "자료=materials, data|미리=in advance|준비하다=to prepare");
+S("work", "회의실은 제가 예약해 둘게요.", "I'll book the meeting room ahead of time.", "nota lge", "회의실=meeting room|예약하다=to book");
+S("work", "그 일은 제가 맡을게요.", "I'll take care of that.", "lge", "맡다=to take charge of");
+S("work", "혹시 시간 괜찮으시면 이것 좀 봐 주실 수 있으세요?", "If you have a moment, could you take a look at this?", "myeon juseyo lsu si", "혹시=by any chance|봐 주다=to look at (for someone)");
+D("work-overtime", "work", "Staying late", [
+  N("{name} 씨, 오늘 야근해요?", "{name}, are you working late today?", "{name} 씨, 오늘 야근해?"),
+  M(["네, 마감이 내일이라서 오늘 다 끝내야겠어요.", "Yes, the deadline's tomorrow, so I'd better finish it all today."],
+    ["네, 마감이 어제라서 다 끝냈어요.", "Yes, the deadline was yesterday so I finished it all.", "Then you wouldn't be staying late."],
+    ["아니요, 야근하기로 했어요.", "No, I decided to work late.", "아니요 + 'I decided to work late' contradicts itself."]),
+  N("힘들겠다. 저녁은 먹었어요?", "That's rough. Did you eat dinner?", "힘들겠다. 저녁은 먹었어?"),
+  M(["아직요. 이것만 끝내고 먹으려고요.", "Not yet. I'm going to eat once I finish this."],
+    ["아직요. 먹으면서 끝냈어요.", "Not yet. I finished it while eating.", "Contradiction: you haven't eaten yet."],
+    ["네, 아직 먹었어요.", "Yes, I ate yet.", "아직 (yet) only works with not-done-yet answers."]),
+  N("편의점 가는 김에 뭐 좀 사다 줄까요?", "I'm going to the convenience store anyway. Want me to grab you something?", "편의점 가는 김에 뭐 좀 사다 줄까?"),
+  M(["정말요? 감사합니다. 그럼 삼각김밥 하나만 부탁드려요.", "Really? Thank you. Then just one triangle kimbap, please."],
+    ["네, 가는 김에 제가 사 드릴게요.", "Yes, while you're going, I'll buy it for you.", "She's the one going; you're staying at your desk."],
+    ["괜찮아요. 사다 줄까요?", "It's fine. Shall I buy you something?", "You're echoing her offer back."]),
+]);
+S("work", "선배, 커피 사러 가는 김에 하나 사다 드릴까요?", "I'm going for coffee anyway. Shall I get you one?", "reo gime lkka honor", "선배=senior (at work or school)|사다 드리다=to buy and bring (humble)");
+S("work", "점심 먹으면서 얘기할까요?", "Shall we talk over lunch?", "myeonseo lkka", "얘기하다=to talk, chat");
+S("work", "요즘 일이 너무 많아져서 정신이 없어요.", "Work has piled up lately, so I'm swamped.", "eojida aseo", "많아지다=to increase|정신이 없다=to be swamped, frazzled");
+S("work", "바쁘실 텐데 도와주셔서 감사합니다.", "You must be busy, so thank you for helping.", "teonde si formal", "도와주다=to help");
+S("work", "팀장님은 벌써 퇴근하셨나 봐요.", "Looks like the team leader has already gone home.", "nabwa si", "팀장님=team leader|퇴근하다=to leave work|벌써=already");
+S("work", "오늘 회식 있대요.", "I heard there's a team dinner tonight.", "dago", "회식=company dinner and drinks");
+S("work", "내일 연차 쓰려고요.", "I'm planning to take tomorrow off.", "ryeogo", "연차(를) 쓰다=to use a vacation day");
+S("work", "마감이 내일이라서 오늘 다 끝내야겠어요.", "The deadline's tomorrow, so I'd better finish it all today.", "ayagetda aseo", "마감=deadline");
+S("work", "실수가 있을까 봐 두 번 확인했어요.", "I checked twice in case there were mistakes.", "lkkabwa past", "실수=mistake|확인하다=to check");
+S("work", "일이 많기 때문에 이번 주는 좀 힘들 것 같아요.", "Because there's so much work, this week will probably be tough.", "ttaemun gat", "이번 주=this week|힘들다=to be hard, tiring");
+S("work", "아무리 바빠도 점심은 꼭 먹어야 돼요.", "However busy you are, you have to eat lunch.", "ado aya", "꼭=definitely, be sure to");
+S("work", "회의가 길어져서 점심을 못 먹었어요.", "The meeting ran long, so I couldn't eat lunch.", "eojida aseo mot", "길어지다=to get longer");
+S("work", "이 회사에서 일한 지 벌써 1년 됐어요.", "I've already been at this company for a year.", "ji", "회사=company");
+S("work", "괜찮은 척했지만 사실 너무 피곤했어요.", "I acted like I was fine, but actually I was exhausted.", "cheok jiman", "사실=actually, in fact");
+S("work", "수고하셨습니다. 먼저 들어가 보겠습니다.", "Thanks for your hard work. I'll head out first.", "formal", "수고하다=to work hard|먼저 들어가 보겠습니다=the set phrase for leaving before others");
+S("work", "회의 끝나자마자 연락드릴게요.", "I'll get in touch as soon as the meeting ends.", "jamaja lge honor", "연락드리다=to contact (humble)");
+S("work", "오늘은 일찍 가야 돼요. 약속이 있거든요.", "I have to leave early today. I have plans, you see.", "geodeun aya", "약속=plans, an appointment");
+S("work", "내일 회의 있잖아요. 자료 준비했어요?", "There's the meeting tomorrow, you know. Did you get the materials ready?", "janha past", "자료=materials");
+D("work-meeting", "work", "Before the meeting", [
+  N("내일 회의 자료 준비했어요?", "Did you prepare the materials for tomorrow's meeting?", "내일 회의 자료 준비했어?"),
+  M(["네, 미리 다 준비해 놨어요.", "Yes, I got it all ready in advance."],
+    ["네, 내일 준비해 놨어요.", "Yes, I got it ready tomorrow.", "Past tense with 내일 (tomorrow) doesn't work."],
+    ["아니요, 다 준비했어요.", "No, I prepared everything.", "아니요 contradicts 'I prepared everything'."]),
+  N("고마워요. 혹시 회의가 몇 시인지 알아요?", "Thanks. Do you happen to know what time the meeting is?", "고마워. 혹시 회의 몇 시인지 알아?"),
+  M(["10시에 시작한대요. 팀장님이 아까 말씀하셨어요.", "They say it starts at 10. The team leader mentioned it earlier."],
+    ["10시에 시작할까 봐요.", "I'm worried it starts at 10.", "-(으)ㄹ까 봐 is worry. Just pass on the info with -대요."],
+    ["몇 시인지 알아요.", "I know what time it is.", "Then tell her!"]),
+  N("아, 그럼 회의실은요?", "Ah, and the meeting room?", "아, 그럼 회의실은?"),
+  M(["회의실은 제가 예약해 둘게요.", "I'll book the meeting room ahead of time."],
+    ["회의실은 제가 예약해 버렸어요.", "I went and booked the room (oops).", "-아/어 버리다 sounds like regret or doing it rashly."],
+    ["회의실이 예약할 만해요.", "The meeting room is worth booking.", "-(으)ㄹ 만하다 is for things worth trying, like a movie or a dish."]),
+]);
+
+// ───────────────────────── 한국 생활 · Living in Korea ─────────────────────────
+S("living", "보일러가 고장 난 것 같아요.", "I think the boiler is broken.", "gat", "보일러=boiler (heating and hot water)|고장 나다=to break down");
+S("living", "어제부터 뜨거운 물이 안 나와요.", "There's been no hot water since yesterday.", "an", "뜨거운 물=hot water|나오다=to come out");
+S("living", "언제쯤 고쳐 주실 수 있으세요?", "Around when could you fix it?", "juseyo lsu si qw", "쯤=around, about|고치다=to fix");
+D("living-repair", "living", "No hot water", [
+  N("네, 여보세요?", "Yes, hello?", "어, 여보세요?"),
+  M(["안녕하세요, 301호예요. 어제부터 뜨거운 물이 안 나와요.", "Hello, it's unit 301. There's been no hot water since yesterday."],
+    ["안녕하세요, 301호예요. 내일부터 뜨거운 물이 안 나와요.", "Hello, it's 301. Starting tomorrow there's no hot water.", "내일부터 = from tomorrow. The problem started yesterday: 어제부터."],
+    ["여보세요, 뜨거운 물 주세요.", "Hello, hot water please.", "Sounds like ordering in a café. Explain the problem."]),
+  N("아이고, 보일러가 고장 났나 보네요. 오늘 오후에 기사님 보낼게요.", "Oh dear, the boiler must have broken. I'll send a repairman this afternoon.", "아이고, 보일러 고장 났나 보네. 오늘 오후에 기사님 보낼게."),
+  M(["감사합니다. 그런데 제가 오후에 회사에 있어서요. 몇 시쯤 오시는지 알 수 있을까요?", "Thank you. But I'm at work in the afternoon. Could I know around what time he's coming?"],
+    ["감사합니다. 몇 시에 오실까 봐요.", "Thanks. I'm worried what time he'll come.", "-(으)ㄹ까 봐 is worry; to ASK the time use -는지 알 수 있을까요?"],
+    ["감사합니다. 제가 고쳐 놨어요.", "Thanks. I already fixed it.", "Then why call?"]),
+  N("4시쯤 갈 거예요. 비밀번호 알려 주면 들어가서 고쳐 놓을게요.", "Around 4. Tell me the door code and he'll go in and fix it.", "4시쯤 갈 거야. 비밀번호 알려 주면 들어가서 고쳐 놓을게."),
+  M(["네, 문자로 보내 드릴게요. 정말 감사합니다.", "Okay, I'll text it to you. Thank you so much."],
+    ["네, 문자로 보내 주세요.", "Okay, please text it to me.", "YOU have the code; you send it to him."],
+    ["아니요, 고쳐 놓지 마세요.", "No, don't fix it.", "You need hot water!"]),
+]);
+S("living", "택배가 오면 경비실에 맡겨 달라고 했어요.", "I asked them to leave the package at the security office when it comes.", "myeon dago", "택배=parcel delivery|경비실=security office|맡기다=to leave in someone's care");
+S("living", "문 앞에 놓고 가 주세요.", "Please leave it at the door.", "juseyo", "문 앞=in front of the door|놓다=to put down");
+S("living", "분리수거는 무슨 요일에 해요?", "What day is recycling?", "qw e", "분리수거=recycling (sorting)|요일=day of the week");
+S("living", "음식물 쓰레기는 어디에 버려요?", "Where do I throw out food waste?", "qw", "음식물 쓰레기=food waste|버리다=to throw away");
+S("living", "윗집이 너무 시끄러워서 잠을 못 자겠어요.", "Upstairs is so noisy I can't sleep.", "aseo mot", "윗집=upstairs neighbor|시끄럽다=to be noisy");
+S("living", "이사 와서 이웃들한테 떡을 돌렸어요.", "When I moved in, I handed out rice cakes to the neighbors.", "aseo past", "이웃=neighbor|떡을 돌리다=to share rice cake (a moving-in custom)");
+S("living", "월세는 매달 25일까지 보내 드리면 되죠?", "I just need to send the rent by the 25th of each month, right?", "jyo myeon", "월세=monthly rent|매달=every month|-면 되다=just need to");
+S("living", "관리비에 인터넷도 포함돼 있어요?", "Is internet included in the maintenance fee too?", "isseo do", "관리비=maintenance fee|포함되다=to be included");
+S("living", "계약이 끝나기 전에 미리 말씀드릴게요.", "I'll let you know ahead of time, before the lease ends.", "lge honor", "계약=contract, lease|-기 전에=before -ing|말씀드리다=to tell (humble)");
+S("living", "이사 온 지 일주일밖에 안 됐어요.", "It's only been a week since I moved in.", "ji", "이사 오다=to move in|밖에 안=only");
+S("living", "나가는 김에 쓰레기 좀 버리고 올게요.", "Since I'm going out anyway, I'll take out the trash.", "gime lge", "나가다=to go out");
+H("living", "날씨가 추워지면 수도가 얼 수도 있어요.", "When it gets cold, the pipes might freeze.", "eojida myeon", "수도=water pipes|얼다=to freeze|-(으)ㄹ 수도 있다=might");
+H("living", "물을 조금 틀어 놓고 주무세요.", "Leave the water running a little when you go to sleep.", "nota seyo", "틀다=to turn on (water, music)|주무시다=to sleep (honorific)");
+S("living", "세탁기가 갑자기 멈춰 버렸어요.", "The washing machine suddenly just stopped.", "beorida", "세탁기=washing machine|멈추다=to stop");
+S("living", "도어락 비밀번호를 잊어버렸어요.", "I forgot my door-lock code.", "beorida", "도어락=keypad door lock|비밀번호=password, code|잊어버리다=to forget");
+S("living", "혹시 이 근처에 빨래방이 있는지 아세요?", "Do you happen to know if there's a laundromat around here?", "lji isseo si", "근처=nearby|빨래방=laundromat");
+S("living", "옆집 사람이 이사 갔나 봐요.", "Looks like the person next door moved out.", "nabwa", "옆집=next door|이사 가다=to move out");
+S("living", "아무리 청소해도 금방 더러워져요.", "No matter how much I clean, it gets dirty fast.", "ado eojida", "청소하다=to clean|금방=soon, quickly|더러워지다=to get dirty");
+S("living", "집이 좀 좁아도 역에서 가까워서 좋아요.", "The place is a bit small, but it's close to the station, so I like it.", "ado aseo", "좁다=cramped, narrow|가깝다=to be close");
+S("living", "살수록 이 동네가 좋아져요.", "The longer I live here, the more I like this neighborhood.", "surok eojida", "살다=to live|동네=neighborhood|좋아지다=to grow on you");
+S("living", "좀 시끄럽지만 이 동네는 살 만해요.", "It's a little noisy, but this neighborhood is a decent place to live.", "manhae jiman", "시끄럽다=to be noisy");
+
+// ───────────────────────── 생각 나누기 · Opinions & advice ─────────────────────────
+S("opinion", "제 생각에는 그게 더 나은 것 같아요.", "In my opinion, that seems better.", "gat", "생각=thought, opinion|낫다=to be better (나은)");
+S("opinion", "솔직히 말하면 좀 아쉬웠어요.", "To be honest, it was a bit disappointing.", "myeon past", "솔직히=honestly|아쉽다=to be a shame, a letdown");
+S("opinion", "그 영화 볼 만해요. 꼭 보세요.", "That movie is worth watching. Definitely see it.", "manhae seyo", "꼭=definitely");
+S("opinion", "한국어는 배울수록 재미있어요.", "The more I learn Korean, the more fun it gets.", "surok", "배우다=to learn");
+S("opinion", "그 말도 맞는데 저는 생각이 좀 달라요.", "That's true too, but I see it a bit differently.", "neunde", "맞다=to be right|다르다=to be different");
+S("opinion", "왜냐하면 요즘 물가가 너무 올랐거든요.", "Because prices have gone up so much these days, you see.", "geodeun", "왜냐하면=because (starting a reason)|물가=cost of living|오르다=to rise");
+S("opinion", "서울은 집값이 비싸잖아요.", "Housing in Seoul is expensive, you know.", "janha", "집값=housing prices");
+S("opinion", "요즘 다들 바쁘잖아요.", "Everyone's busy these days, you know.", "janha", "다들=everyone");
+S("opinion", "저도 처음에는 그렇게 생각했거든요.", "I thought so too at first, you see.", "geodeun past", "처음에는=at first|그렇게=like that");
+S("opinion", "해 보니까 생각보다 어렵더라고요.", "Once I tried it, it turned out harder than I thought.", "deora bwa", "생각보다=than expected|-(으)니까 here = 'once I…, I found'");
+D("opinion-advice", "opinion", "Should I quit?", [
+  N("요즘 회사 그만둘까 고민 중이에요.", "Lately I've been thinking about quitting my job.", "요즘 회사 그만둘까 고민 중이야."),
+  M(["진짜요? 무슨 일 있었어요?", "Really? Did something happen?"],
+    ["진짜요? 축하해요!", "Really? Congratulations!", "Quitting because you're struggling isn't something to celebrate. Ask first."],
+    ["저도 회사 그만뒀거든요.", "Because I quit my job too, you see.", "-거든요 gives a reason, and there's nothing to explain yet. Ask what happened."]),
+  N("일이 너무 많아져서 매일 야근하거든요. 너무 지쳤어요.", "Work has piled up and I'm staying late every day, you see. I'm worn out.", "일이 너무 많아져서 매일 야근하거든. 너무 지쳤어."),
+  M(["많이 힘들었겠네요. 그래도 그만두기 전에 다른 회사부터 알아보는 게 어때요?", "That must have been really hard. But before you quit, how about looking at other companies first?"],
+    ["많이 힘들었겠네요. 그럼 내일 그만둬 버리세요.", "Must have been hard. Then just go quit tomorrow.", "Too blunt, and -아/어 버리다 as advice sounds reckless."],
+    ["저도 야근할까 봐요.", "I'm worried I'll have to work late too.", "That makes it about you."]),
+  N("맞아요. 그게 낫겠다. 고마워요.", "You're right. That'd be better. Thanks.", "맞아. 그게 낫겠다. 고마워."),
+  M(["아니에요. 힘들 때는 언제든지 연락해요.", "Don't mention it. Whenever things get hard, reach out anytime."],
+    ["아니에요. 연락하지 마세요.", "No problem. Don't contact me.", "Yikes."],
+    ["고마워요.", "Thank you.", "She thanked you; thanking her back doesn't fit."]),
+]);
+S("opinion", "피곤할 텐데 오늘은 일찍 쉬세요.", "You must be tired, so rest early today.", "teonde seyo", "일찍=early|쉬다=to rest");
+S("opinion", "저라면 그냥 솔직하게 말할 것 같아요.", "If it were me, I think I'd just say it honestly.", "gat", "저라면=if it were me|솔직하게=honestly");
+S("opinion", "너무 걱정하지 마세요. 다 잘될 거예요.", "Don't worry too much. It'll all work out.", "jima future", "잘되다=to go well");
+S("opinion", "이직할지 말지 아직 고민 중이에요.", "I'm still deciding whether or not to change jobs.", "lji", "이직하다=to change jobs|-(으)ㄹ지 말지=whether or not|고민 중=mulling it over");
+S("opinion", "건강을 위해서 운동을 시작하기로 했어요.", "I decided to start exercising for my health.", "giro", "건강=health|-을 위해서=for the sake of");
+S("opinion", "그런 일이 있으면 저한테 먼저 말해 주세요.", "If something like that happens, tell me first.", "myeon juseyo", "그런 일=that kind of thing|먼저=first");
+S("opinion", "모르면서 아는 척하는 게 제일 싫어요.", "What I hate most is acting like you know when you don't.", "myeonseo cheok gi", "제일=the most|싫다=to dislike");
+S("opinion", "날씨가 따뜻해지면 같이 캠핑 가요.", "When it warms up, let's go camping together.", "eojida", "따뜻해지다=to get warm");
+S("opinion", "실패해도 괜찮아요. 해 보는 게 중요하잖아요.", "It's okay even if you fail. Trying is what matters, you know.", "ado janha bwa gi", "실패하다=to fail|중요하다=to be important");
+S("opinion", "어차피 해야 되면 빨리 하는 게 나아요.", "If you have to do it anyway, it's better to get it done fast.", "aya gi", "어차피=anyway|낫다=to be better");
+S("opinion", "그건 좀 아닌 것 같아요.", "I don't think that's quite right.", "gat", "the soft, polite way to disagree");
+S("opinion", "듣고 보니 그 말이 맞네요.", "Now that I hear it, you're right.", "neyo", "듣고 보니=now that I hear it");
+S("opinion", "무슨 말인지 알겠어요.", "I see what you mean.", "lji", "무슨 말=what (someone) means|알겠다=to get it");
+S("opinion", "매운데 먹을 만해요.", "It's spicy, but totally manageable.", "manhae neunde", "맵다=to be spicy");
+S("opinion", "비 때문에 약속을 취소했어요.", "We canceled our plans because of the rain.", "ttaemun past", "취소하다=to cancel");
+S("opinion", "벌써 열한 시네요. 이제 가야겠어요.", "It's already eleven. I'd better get going.", "ayagetda neyo", "벌써=already|이제=now");
+S("opinion", "드라마를 보다가 한국어에 관심을 갖게 됐어요.", "I got into Korean while watching dramas.", "daga ge", "관심을 갖다=to take an interest");
+
 // ───────────────────────── 눈치 · culture notes ─────────────────────────
 const CULTURE = [
   { id: "c1", scene: "basics", title: "해요 is your home base",
@@ -1267,29 +1561,16 @@ const CULTURE = [
     body: "Bring something like a fruit box, red ginseng (홍삼), or a nice item from home, and hand it over with both hands. They'll protest (뭘 이런 걸 다…). That's politeness, not refusal. Answer 별거 아니에요." },
   { id: "c32", scene: "inlaws", title: "Expect personal questions",
     body: "Job, school, your parents' jobs, siblings, marriage plans, even salary can come up. It's how parents get to know you, not rudeness. Answer warmly and modestly." },
+  { id: "c34", scene: "story", title: "맞장구: listen out loud",
+    body: "Korean listeners react constantly while you talk: 헐 (whoa), 대박 (amazing), 진짜요? (really?), 어떡해 (oh no), 그래서요? (and then?). Staying silent can feel like you're not interested. Throw these in while someone tells a story." },
+  { id: "c35", scene: "work", title: "Leaving before your 선배",
+    body: "In many offices, leaving before your seniors still feels awkward. Juniors say 먼저 들어가 보겠습니다 (I'll head out first) and seniors answer 수고했어요. 회식 (team dinners) used to be near-mandatory; today it's more relaxed, but showing up for the first round is good manners." },
+  { id: "c36", scene: "living", title: "Trash is serious business",
+    body: "Regular trash goes in official 종량제 봉투 (pay-per-bag bags) from the convenience store. Food waste goes in separate yellow bags or bins, and recyclables are sorted on set days. Get it wrong and a neighbor (or the 경비 아저씨) will let you know." },
+  { id: "c37", scene: "opinion", title: "Disagreeing softly",
+    body: "A flat 아니에요, 틀렸어요 (no, that's wrong) sounds harsh. Soften it: 그 말도 맞는데… (that's true too, but…), 저는 생각이 좀 달라요, or 그건 좀 아닌 것 같아요. -것 같아요 turns any opinion into a gentle one." },
+  { id: "c38", scene: "story", title: "-거든요 vs -잖아요",
+    body: "Both explain things, but differently. -거든요 gives NEW info the listener didn't know (…, you see): 저 내일 못 가요. 시험이 있거든요. -잖아요 points to info they DO know (…, you know): 내일 시험이잖아요! Mixing them up can sound like you're scolding someone." },
   { id: "c33", scene: "inlaws", title: "At the family table",
     body: "Wait for the eldest to pick up their spoon first. Don't leave the table before the elders, pour drinks with two hands, and offer to help clean up (제가 설거지할게요). They'll probably say no, but the offer counts." },
-];
-
-// ───────────────────────── real-world missions ─────────────────────────
-const MISSIONS = [
-  { id: "m1", ko: "인사하기", en: "Greet a Korean speaker with 안녕하세요 and thank them with 감사합니다.", lvl: 1 },
-  { id: "m2", ko: "주문하기", en: "Order food or a drink entirely in Korean (a Korean café, restaurant, or H Mart counter counts).", lvl: 1 },
-  { id: "m3", ko: "잘 먹었습니다", en: "Say 잘 먹었습니다 to the staff when leaving a Korean restaurant.", lvl: 1 },
-  { id: "m4", ko: "질문하기", en: "Ask someone a real question in Korean: a price, directions, or a recommendation.", lvl: 1 },
-  { id: "m5", ko: "다시 말해 주세요", en: "When you don't catch something, say 다시 한 번 말해 주세요 instead of switching to English.", lvl: 1 },
-  { id: "m6", ko: "자기소개", en: "Introduce yourself in Korean: name, where you're from, why you're learning.", lvl: 2 },
-  { id: "m7", ko: "카톡 보내기", en: "Send a KakaoTalk or text message in Korean to a Korean speaker.", lvl: 2 },
-  { id: "m8", ko: "칭찬하기", en: "Give someone a compliment in Korean with -네요 (e.g., 진짜 맛있네요!).", lvl: 2 },
-  { id: "m9", ko: "쉐도잉 3분", en: "Shadow 3 minutes of a Korean YouTube vlog or drama scene, speaking along out loud.", lvl: 1 },
-  { id: "m10", ko: "자막 없이 5분", en: "Watch 5 minutes of a Korean show without subtitles and write down one phrase you caught.", lvl: 2 },
-  { id: "m11", ko: "새 문법 쓰기", en: "Use a grammar pattern you learned this week in a real conversation.", lvl: 2 },
-  { id: "m12", ko: "2분 대화", en: "Hold a 2-minute conversation in Korean without switching to English.", lvl: 3 },
-  { id: "m13", ko: "언어 교환", en: "Join a language exchange: a meetup, a campus Korean club, or an app like HelloTalk or Tandem.", lvl: 2 },
-  { id: "m14", ko: "많이 파세요", en: "Say 많이 파세요! or 수고하세요 to a vendor or cashier as you leave.", lvl: 1 },
-  { id: "m15", ko: "통화하기", en: "Make a short phone call in Korean (e.g., ask a Korean restaurant if they're open).", lvl: 3 },
-  { id: "m16", ko: "자기소개 녹음", en: "Record a 1-minute self-introduction in Korean (personality, hobbies, family, why Korean), then listen back.", lvl: 2 },
-  { id: "m17", ko: "옷 사이즈 묻기", en: "Ask about a size or color in Korean at a store, or role-play it with a Korean speaker.", lvl: 2 },
-  { id: "m18", ko: "사진 부탁하기", en: "Ask someone in Korean to take a photo for you (사진 좀 찍어 주실 수 있어요?).", lvl: 1 },
-  { id: "m19", ko: "가족 인사 연습", en: "Rehearse meeting a partner's parents with a Korean speaker: greeting, gift line, and 앞으로 잘 부탁드립니다.", lvl: 3 },
 ];

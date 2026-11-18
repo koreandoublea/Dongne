@@ -24,23 +24,28 @@
   <span id="streak">🔥 0</span>
   <button id="focus" class="chip-btn"></button>
   <button id="quiet" class="icon-btn" aria-label="Toggle quiet mode"></button>
+  <button id="gear" class="icon-btn" aria-label="Settings">⚙️</button>
 </header>
 <main>
   <div id="view-feed" class="view on"><div id="feed"></div></div>
   <div id="view-map" class="view page"></div>
   <div id="view-grammar" class="view page"></div>
-  <div id="view-missions" class="view page"></div>
+  <div id="view-words" class="view page"></div>
+  <div id="view-review" class="view page"></div>
+  <div id="view-progress" class="view page"></div>
   <div id="view-settings" class="view page"></div>
 </main>
 <nav>
   <button data-v="feed" class="on"><span>▶️</span>피드</button>
   <button data-v="map"><span>🏘️</span>동네</button>
   <button data-v="grammar"><span>📐</span>문법</button>
-  <button data-v="missions"><span>🎯</span>미션</button>
-  <button data-v="settings"><span>⚙️</span>설정</button>
+  <button data-v="words"><span>📖</span>단어장</button>
+  <button data-v="review"><span>🔁</span>복습</button>
+  <button data-v="progress"><span>📈</span>기록</button>
 </nav>
 <div id="toast" role="status"></div>
 <script src="content.js"></script>
+<script src="vocab.js"></script>
 <script src="speech.js"></script>
 <script src="app.js"></script>
 </body>
